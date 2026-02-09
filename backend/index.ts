@@ -23,6 +23,7 @@ import {
   upsertGoogleUser,
 } from "./db/auth";
 import { getUserProfile, updateUserName, upsertVendorProfile, getVendorIdByUserId } from "./db/profile";
+import { getPool } from "./db/pool";
 import {
   getAvailableSlots,
   createBooking,
@@ -367,12 +368,22 @@ async function start() {
   // ---- Availability Slots API (JWT protected) ----
   // Get available slots (optional filters: vendorId, serviceId, fromDate)
   app.get("/api/availability", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    
     try {
-      const vendorId = req.query.vendorId ? Number(req.query.vendorId) : undefined;
+      let vendorId = req.query.vendorId ? Number(req.query.vendorId) : undefined;
+      let includeBooked = false;
+      
+      // If user is a vendor and no vendorId specified, use their vendor ID and include booked slots
+      if (user && user.role === "vendor" && !vendorId) {
+        vendorId = await getVendorIdByUserId(user.id);
+        includeBooked = true; // Vendors see all their slots (booked and available)
+      }
+      
       const serviceId = req.query.serviceId ? Number(req.query.serviceId) : undefined;
       const fromDate = typeof req.query.fromDate === "string" ? req.query.fromDate : undefined;
 
-      const slots = await getAvailableSlots({ vendorId, serviceId, fromDate });
+      const slots = await getAvailableSlots({ vendorId, serviceId, fromDate, includeBooked });
       res.status(200).json({ ok: true, slots });
     } catch (err: any) {
       res.status(400).json({ error: err?.message ?? "Failed to fetch availability" });
@@ -595,6 +606,197 @@ async function start() {
   });
 
   // ---- Analytics API (JWT protected) ----
+  // Vendor Services Management
+  app.get("/api/vendor/services", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    if (!user || user.role !== "vendor") {
+      res.status(403).json({ error: "Forbidden: vendors only" });
+      return;
+    }
+
+    try {
+      const vendorId = await getVendorIdByUserId(user.id);
+      const pool = getPool();
+      
+      const result = await pool.query(
+        `SELECT 
+          s.id, 
+          s.title, 
+          s.description, 
+          s.price, 
+          s.duration_minutes, 
+          s.is_active,
+          s.category_id,
+          sc.name as category_name
+         FROM services s
+         JOIN service_categories sc ON sc.id = s.category_id
+         WHERE s.vendor_id = $1
+         ORDER BY s.created_at DESC`,
+        [vendorId]
+      );
+
+      res.status(200).json({ ok: true, services: result.rows });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? "Failed to fetch services" });
+    }
+  });
+
+  app.post("/api/vendor/services", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    if (!user || user.role !== "vendor") {
+      res.status(403).json({ error: "Forbidden: vendors only" });
+      return;
+    }
+
+    const { title, description, price, durationMinutes, categoryId } = req.body ?? {};
+
+    if (!title || !categoryId) {
+      res.status(400).json({ error: "Missing required fields: title, categoryId" });
+      return;
+    }
+
+    try {
+      const vendorId = await getVendorIdByUserId(user.id);
+      const pool = getPool();
+      
+      const result = await pool.query(
+        `INSERT INTO services (vendor_id, category_id, title, description, price, duration_minutes, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         RETURNING id, title, description, price, duration_minutes, is_active, category_id`,
+        [vendorId, categoryId, title, description || null, price || null, durationMinutes || null]
+      );
+
+      res.status(201).json({ ok: true, service: result.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? "Failed to create service" });
+    }
+  });
+
+  app.patch("/api/vendor/services/:serviceId", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    if (!user || user.role !== "vendor") {
+      res.status(403).json({ error: "Forbidden: vendors only" });
+      return;
+    }
+
+    const serviceId = Number(req.params.serviceId);
+    if (isNaN(serviceId)) {
+      res.status(400).json({ error: "Invalid service ID" });
+      return;
+    }
+
+    const { title, description, price, durationMinutes, categoryId, isActive } = req.body ?? {};
+
+    try {
+      const vendorId = await getVendorIdByUserId(user.id);
+      const pool = getPool();
+      
+      // Verify service belongs to this vendor
+      const checkResult = await pool.query(
+        `SELECT vendor_id FROM services WHERE id = $1`,
+        [serviceId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        res.status(404).json({ error: "Service not found" });
+        return;
+      }
+
+      if (checkResult.rows[0].vendor_id !== vendorId) {
+        res.status(403).json({ error: "Forbidden: not your service" });
+        return;
+      }
+
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramCount = 1;
+
+      if (title !== undefined) {
+        updates.push(`title = $${paramCount++}`);
+        values.push(title);
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${paramCount++}`);
+        values.push(description);
+      }
+      if (price !== undefined) {
+        updates.push(`price = $${paramCount++}`);
+        values.push(price);
+      }
+      if (durationMinutes !== undefined) {
+        updates.push(`duration_minutes = $${paramCount++}`);
+        values.push(durationMinutes);
+      }
+      if (categoryId !== undefined) {
+        updates.push(`category_id = $${paramCount++}`);
+        values.push(categoryId);
+      }
+      if (isActive !== undefined) {
+        updates.push(`is_active = $${paramCount++}`);
+        values.push(isActive);
+      }
+
+      if (updates.length === 0) {
+        res.status(400).json({ error: "No fields to update" });
+        return;
+      }
+
+      values.push(serviceId);
+      const result = await pool.query(
+        `UPDATE services 
+         SET ${updates.join(", ")}
+         WHERE id = $${paramCount}
+         RETURNING id, title, description, price, duration_minutes, is_active, category_id`,
+        values
+      );
+
+      res.status(200).json({ ok: true, service: result.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? "Failed to update service" });
+    }
+  });
+
+  app.delete("/api/vendor/services/:serviceId", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    if (!user || user.role !== "vendor") {
+      res.status(403).json({ error: "Forbidden: vendors only" });
+      return;
+    }
+
+    const serviceId = Number(req.params.serviceId);
+    if (isNaN(serviceId)) {
+      res.status(400).json({ error: "Invalid service ID" });
+      return;
+    }
+
+    try {
+      const vendorId = await getVendorIdByUserId(user.id);
+      const pool = getPool();
+      
+      // Verify service belongs to this vendor
+      const checkResult = await pool.query(
+        `SELECT vendor_id FROM services WHERE id = $1`,
+        [serviceId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        res.status(404).json({ error: "Service not found" });
+        return;
+      }
+
+      if (checkResult.rows[0].vendor_id !== vendorId) {
+        res.status(403).json({ error: "Forbidden: not your service" });
+        return;
+      }
+
+      await pool.query(`DELETE FROM services WHERE id = $1`, [serviceId]);
+
+      res.status(200).json({ ok: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? "Failed to delete service" });
+    }
+  });
+
   // Vendor analytics
   app.get("/api/analytics/vendor", async (req, res) => {
     const user = getAuthUserFromRequest(req);

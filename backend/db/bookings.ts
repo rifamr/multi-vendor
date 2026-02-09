@@ -33,11 +33,17 @@ export async function getAvailableSlots(params: {
   vendorId?: number;
   serviceId?: number;
   fromDate?: string;
+  includeBooked?: boolean;
 }): Promise<AvailabilitySlot[]> {
   const pool = getPool();
 
-  const where: string[] = ["slots.is_available = true"];
+  const where: string[] = [];
   const values: Array<number | string> = [];
+
+  // Only filter by is_available if not includeBooked
+  if (!params.includeBooked) {
+    where.push("slots.is_available = true");
+  }
 
   if (params.vendorId) {
     values.push(params.vendorId);
