@@ -344,7 +344,10 @@ export default function VendorServices() {
       const result = await response.json();
 
       if (result.ok) {
+        console.log("Slots fetched:", result.slots);
         setSlots(result.slots);
+      } else {
+        console.error("Failed to fetch slots:", result.error);
       }
     } catch (err) {
       console.error("Failed to fetch slots:", err);

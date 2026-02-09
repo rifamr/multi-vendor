@@ -78,7 +78,12 @@ export async function getAvailableSlots(params: {
     LIMIT 100
   `;
 
+  console.log("[getAvailableSlots] Query params:", params);
+  console.log("[getAvailableSlots] SQL:", sql);
+  console.log("[getAvailableSlots] Values:", values);
+
   const result = await pool.query<AvailabilitySlot>(sql, values);
+  console.log("[getAvailableSlots] Rows returned:", result.rows.length);
   return result.rows;
 }
 

@@ -56,11 +56,11 @@ export default function ServiceDetails() {
     const fetchSlots = async () => {
       setLoadingSlots(true);
       try {
-        const response = await fetch(
-          `/api/availability?serviceId=${serviceId}&fromDate=${new Date().toISOString().split("T")[0]}`,
-          { credentials: "include" }
-        );
+        const url = `/api/availability?serviceId=${serviceId}&fromDate=${new Date().toISOString().split("T")[0]}`;
+        console.log("[Customer ServiceDetails] Fetching slots from:", url);
+        const response = await fetch(url, { credentials: "include" });
         const result = await response.json();
+        console.log("[Customer ServiceDetails] Slots received:", result.slots);
         if (result.ok) {
           setAvailableSlots(result.slots);
         }

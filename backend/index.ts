@@ -378,14 +378,17 @@ async function start() {
       if (user && user.role === "vendor" && !vendorId) {
         vendorId = await getVendorIdByUserId(user.id);
         includeBooked = true; // Vendors see all their slots (booked and available)
+        console.log("[GET /api/availability] User ID:", user.id, "Vendor ID:", vendorId, "Include Booked:", includeBooked);
       }
       
       const serviceId = req.query.serviceId ? Number(req.query.serviceId) : undefined;
       const fromDate = typeof req.query.fromDate === "string" ? req.query.fromDate : undefined;
 
       const slots = await getAvailableSlots({ vendorId, serviceId, fromDate, includeBooked });
+      console.log("[GET /api/availability] Slots returned:", slots.length);
       res.status(200).json({ ok: true, slots });
     } catch (err: any) {
+      console.error("[GET /api/availability] Error:", err);
       res.status(400).json({ error: err?.message ?? "Failed to fetch availability" });
     }
   });
@@ -408,6 +411,7 @@ async function start() {
     try {
       // Get the vendor ID from the user ID
       const vendorId = await getVendorIdByUserId(user.id);
+      console.log("[POST /api/availability] User ID:", user.id, "Vendor ID:", vendorId, "Date:", slotDate, "Time:", startTime, "-", endTime);
       
       const slot = await createAvailabilitySlot({
         vendorId,
@@ -415,8 +419,10 @@ async function start() {
         startTime,
         endTime,
       });
+      console.log("[POST /api/availability] Slot created:", slot);
       res.status(201).json({ ok: true, slot });
     } catch (err: any) {
+      console.error("[POST /api/availability] Error:", err);
       res.status(400).json({ error: err?.message ?? "Failed to create availability slot" });
     }
   });
