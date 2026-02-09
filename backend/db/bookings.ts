@@ -55,6 +55,7 @@ export async function getAvailableSlots(params: {
     where.push(`services.id = $${values.length}`);
   }
 
+  // Always filter by date - show only current and future slots
   if (params.fromDate) {
     values.push(params.fromDate);
     where.push(`slots.slot_date >= $${values.length}::date`);
@@ -72,7 +73,7 @@ export async function getAvailableSlots(params: {
       slots.is_available AS "isAvailable"
     FROM availability_slots slots
     ${params.serviceId ? "JOIN services ON services.vendor_id = slots.vendor_id" : ""}
-    WHERE ${where.join(" AND ")}
+    ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
     ORDER BY slots.slot_date ASC, slots.start_time ASC
     LIMIT 100
   `;
