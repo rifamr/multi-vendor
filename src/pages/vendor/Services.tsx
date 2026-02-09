@@ -99,7 +99,7 @@ export default function VendorServices() {
 
   const fetchVendorProfile = async () => {
     try {
-      const response = await fetch("/api/profile", {
+      const response = await fetch("/auth/profile", {
         credentials: "include",
       });
       const result = await response.json();
