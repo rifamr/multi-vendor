@@ -1,16 +1,26 @@
 import { useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
 import { ArrowLeft, Calendar, Clock, MapPin, Star, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { GET_SERVICE_BY_ID } from "@/graphql/serviceQueries";
-import { timeSlots } from "@/data/mockData";
+
+type AvailabilitySlot = {
+  id: number;
+  vendorId: number;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+};
 
 export default function CustomerServiceDetails() {
   const { id } = useParams();
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<AvailabilitySlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const serviceId = id ?? "1";
   const { data, loading, error } = useQuery(GET_SERVICE_BY_ID, {
@@ -31,6 +41,42 @@ export default function CustomerServiceDetails() {
         vendor: { id: string; displayName: string; city: string; region: string };
       }
     | undefined;
+
+  // Fetch available slots from API
+  useEffect(() => {
+    if (!serviceId) return;
+
+    const fetchSlots = async () => {
+      setLoadingSlots(true);
+      try {
+        const url = `/api/availability?serviceId=${serviceId}&fromDate=${new Date().toISOString().split("T")[0]}`;
+        const response = await fetch(url, { credentials: "include" });
+        const result = await response.json();
+        if (result.ok) {
+          setAvailableSlots(result.slots);
+        }
+      } catch (err) {
+        console.error("Failed to fetch slots:", err);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    fetchSlots();
+  }, [serviceId]);
+
+  // Format time from "09:00" to "9:00 AM"
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${period}`;
+  };
+
+  const selectedSlotDetails = selectedSlot
+    ? availableSlots.find((s) => s.id === selectedSlot)
+    : null;
 
   return (
     <DashboardLayout role="customer">
@@ -93,21 +139,27 @@ export default function CustomerServiceDetails() {
                 <h3 className="font-display font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Calendar size={18} className="text-primary" /> Available Time Slots
                 </h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                  {timeSlots.map((slot) => (
-                    <button
-                      key={slot}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                        selectedSlot === slot
-                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
+                {loadingSlots ? (
+                  <div className="text-sm text-muted-foreground">Loading available slots...</div>
+                ) : availableSlots.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No available slots at the moment. Please check back later.</div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    {availableSlots.map((slot) => (
+                      <button
+                        key={slot.id}
+                        onClick={() => setSelectedSlot(slot.id)}
+                        className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                          selectedSlot === slot.id
+                            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                            : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
+                        }`}
+                      >
+                        {formatTime(slot.startTime)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
 
@@ -131,10 +183,10 @@ export default function CustomerServiceDetails() {
                     <span>Category</span>
                     <span className="font-medium">{service.category.name}</span>
                   </div>
-                  {selectedSlot && (
+                  {selectedSlotDetails && (
                     <div className="flex justify-between text-slate-900">
                       <span>Selected</span>
-                      <span className="font-medium text-primary">{selectedSlot}</span>
+                      <span className="font-medium text-primary">{formatTime(selectedSlotDetails.startTime)}</span>
                     </div>
                   )}
                 </div>
