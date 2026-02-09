@@ -64,7 +64,7 @@ export async function getAvailableSlots(params: {
   }
 
   const sql = `
-    SELECT DISTINCT
+    SELECT
       slots.id,
       slots.vendor_id AS "vendorId",
       slots.slot_date::text AS "slotDate",

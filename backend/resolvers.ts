@@ -192,6 +192,10 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
 
   try {
     const result = await pool.query<DbServiceRow>(sql, values);
+    console.log("[dbGetServices] Services found:", result.rows.length);
+    if (result.rows.length > 0) {
+      console.log("[dbGetServices] Sample service:", result.rows[0]);
+    }
     return result.rows;
   } catch (err) {
     // eslint-disable-next-line no-console

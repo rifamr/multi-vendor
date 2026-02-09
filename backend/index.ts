@@ -663,6 +663,7 @@ async function start() {
 
     try {
       const vendorId = await getVendorIdByUserId(user.id);
+      console.log("[POST /api/vendor/services] User ID:", user.id, "Vendor ID:", vendorId, "Category ID:", categoryId);
       const pool = getPool();
       
       const result = await pool.query(
@@ -672,8 +673,10 @@ async function start() {
         [vendorId, categoryId, title, description || null, price || null, durationMinutes || null]
       );
 
+      console.log("[POST /api/vendor/services] Service created:", result.rows[0]);
       res.status(201).json({ ok: true, service: result.rows[0] });
     } catch (err: any) {
+      console.error("[POST /api/vendor/services] Error:", err);
       res.status(400).json({ error: err?.message ?? "Failed to create service" });
     }
   });

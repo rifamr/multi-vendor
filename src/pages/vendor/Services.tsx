@@ -60,6 +60,28 @@ type AvailabilitySlot = {
   isAvailable: boolean;
 };
 
+// Standard time slots (30-minute intervals)
+const TIME_SLOTS = [
+  { start: "09:00", end: "09:30", label: "9:00 AM" },
+  { start: "09:30", end: "10:00", label: "9:30 AM" },
+  { start: "10:00", end: "10:30", label: "10:00 AM" },
+  { start: "10:30", end: "11:00", label: "10:30 AM" },
+  { start: "11:00", end: "11:30", label: "11:00 AM" },
+  { start: "11:30", end: "12:00", label: "11:30 AM" },
+  { start: "12:00", end: "12:30", label: "12:00 PM" },
+  { start: "12:30", end: "13:00", label: "12:30 PM" },
+  { start: "13:00", end: "13:30", label: "1:00 PM" },
+  { start: "13:30", end: "14:00", label: "1:30 PM" },
+  { start: "14:00", end: "14:30", label: "2:00 PM" },
+  { start: "14:30", end: "15:00", label: "2:30 PM" },
+  { start: "15:00", end: "15:30", label: "3:00 PM" },
+  { start: "15:30", end: "16:00", label: "3:30 PM" },
+  { start: "16:00", end: "16:30", label: "4:00 PM" },
+  { start: "16:30", end: "17:00", label: "4:30 PM" },
+  { start: "17:00", end: "17:30", label: "5:00 PM" },
+  { start: "17:30", end: "18:00", label: "5:30 PM" },
+];
+
 export default function VendorServices() {
   const { toast } = useToast();
   
@@ -84,8 +106,7 @@ export default function VendorServices() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [showAddSlotDialog, setShowAddSlotDialog] = useState(false);
   const [slotDate, setSlotDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]); // Store "start-end" strings
   const [submitting, setSubmitting] = useState(false);
 
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
@@ -359,10 +380,19 @@ export default function VendorServices() {
   const handleAddSlot = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!slotDate || !startTime || !endTime) {
+    if (!slotDate) {
       toast({
-        title: "Missing Fields",
-        description: "Please fill in all fields.",
+        title: "Missing Date",
+        description: "Please select a date.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedTimeSlots.length === 0) {
+      toast({
+        title: "No Time Slots Selected",
+        description: "Please select at least one time slot.",
         variant: "destructive",
       });
       return;
@@ -370,45 +400,69 @@ export default function VendorServices() {
 
     setSubmitting(true);
     try {
-      const response = await fetch("/api/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          slotDate,
-          startTime,
-          endTime,
-        }),
+      // Create all selected slots
+      const promises = selectedTimeSlots.map(slotKey => {
+        const [startTime, endTime] = slotKey.split('-');
+        return fetch("/api/availability", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            slotDate,
+            startTime,
+            endTime,
+          }),
+        });
       });
 
-      const result = await response.json();
+      const responses = await Promise.all(promises);
+      const results = await Promise.all(responses.map(r => r.json()));
 
-      if (result.ok) {
+      const failedSlots = results.filter(r => !r.ok);
+      
+      if (failedSlots.length === 0) {
         toast({
           title: "Success",
-          description: "Availability slot created successfully.",
+          description: `${selectedTimeSlots.length} availability slot(s) created successfully.`,
         });
         setShowAddSlotDialog(false);
         setSlotDate("");
-        setStartTime("");
-        setEndTime("");
+        setSelectedTimeSlots([]);
         fetchSlots();
       } else {
         toast({
-          title: "Error",
-          description: result.error || "Failed to create slot.",
+          title: "Partial Success",
+          description: `${results.length - failedSlots.length} slot(s) created, ${failedSlots.length} failed.`,
           variant: "destructive",
         });
+        fetchSlots();
       }
     } catch (err) {
       toast({
         title: "Error",
-        description: "An error occurred while creating the slot.",
+        description: "An error occurred while creating the slots.",
         variant: "destructive",
       });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const toggleTimeSlot = (slotKey: string) => {
+    setSelectedTimeSlots(prev => 
+      prev.includes(slotKey) 
+        ? prev.filter(s => s !== slotKey)
+        : [...prev, slotKey]
+    );
+  };
+
+  const isSlotAlreadyCreated = (startTime: string, endTime: string) => {
+    if (!slotDate) return false;
+    return slots.some(slot => 
+      slot.slotDate === slotDate && 
+      slot.startTime === startTime && 
+      slot.endTime === endTime
+    );
   };
 
   const handleDeleteSlot = async (slotId: number) => {
@@ -713,11 +767,11 @@ export default function VendorServices() {
                     <Plus size={16} /> Add Time Slot
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add Availability Slot</DialogTitle>
+                    <DialogTitle>Add Availability Slots</DialogTitle>
                     <DialogDescription>
-                      Create a new time slot for your availability
+                      Select a date and the time slots you want to make available
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddSlot} className="space-y-4">
@@ -727,39 +781,65 @@ export default function VendorServices() {
                         id="date"
                         type="date"
                         value={slotDate}
-                        onChange={(e) => setSlotDate(e.target.value)}
+                        onChange={(e) => {
+                          setSlotDate(e.target.value);
+                          setSelectedTimeSlots([]); // Reset selections when date changes
+                        }}
                         min={new Date().toISOString().split("T")[0]}
                         required
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+
+                    {slotDate && (
                       <div className="space-y-2">
-                        <Label htmlFor="startTime">Start Time</Label>
-                        <Input
-                          id="startTime"
-                          type="time"
-                          value={startTime}
-                          onChange={(e) => setStartTime(e.target.value)}
-                          required
-                        />
+                        <Label>Select Time Slots</Label>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {TIME_SLOTS.map((slot) => {
+                            const slotKey = `${slot.start}-${slot.end}`;
+                            const isSelected = selectedTimeSlots.includes(slotKey);
+                            const alreadyCreated = isSlotAlreadyCreated(slot.start, slot.end);
+                            
+                            return (
+                              <button
+                                key={slotKey}
+                                type="button"
+                                onClick={() => !alreadyCreated && toggleTimeSlot(slotKey)}
+                                disabled={alreadyCreated}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                  alreadyCreated
+                                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                                    : isSelected
+                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                                    : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
+                                }`}
+                              >
+                                {slot.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedTimeSlots.length > 0 
+                            ? `${selectedTimeSlots.length} slot(s) selected` 
+                            : "Click on time slots to select them"}
+                        </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="endTime">End Time</Label>
-                        <Input
-                          id="endTime"
-                          type="time"
-                          value={endTime}
-                          onChange={(e) => setEndTime(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
+                    )}
+
                     <div className="flex gap-2 justify-end">
-                      <Button type="button" variant="outline" onClick={() => setShowAddSlotDialog(false)}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setShowAddSlotDialog(false);
+                          setSlotDate("");
+                          setSelectedTimeSlots([]);
+                        }}
+                      >
                         Cancel
                       </Button>
-                      <Button type="submit" disabled={submitting}>
-                        {submitting ? "Creating..." : "Create Slot"}
+                      <Button type="submit" disabled={submitting || selectedTimeSlots.length === 0}>
+                        {submitting ? "Creating..." : `Create ${selectedTimeSlots.length || ''} Slot(s)`}
                       </Button>
                     </div>
                   </form>
