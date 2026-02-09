@@ -22,7 +22,7 @@ import {
   type SessionUser,
   upsertGoogleUser,
 } from "./db/auth";
-import { getUserProfile, updateUserName, upsertVendorProfile } from "./db/profile";
+import { getUserProfile, updateUserName, upsertVendorProfile, getVendorIdByUserId } from "./db/profile";
 import {
   getAvailableSlots,
   createBooking,
@@ -192,18 +192,18 @@ async function start() {
 
       const user = await registerLocalUser({ email, password, role, name });
       
-      // If registering as vendor, create vendor profile
-      if (role === "vendor" && vendorProfile) {
+      // If registering as vendor, always create vendor profile (even if empty)
+      if (role === "vendor") {
         try {
           await upsertVendorProfile({
             userId: user.id,
-            businessName: vendorProfile.businessName,
-            serviceArea: vendorProfile.serviceArea,
-            experienceYears: vendorProfile.experienceYears,
-            serviceCategoryId: vendorProfile.serviceCategoryId,
-            licenseDocumentUrl: vendorProfile.licenseDocumentUrl,
-            phoneNumber: vendorProfile.phoneNumber,
-            description: vendorProfile.description,
+            businessName: vendorProfile?.businessName,
+            serviceArea: vendorProfile?.serviceArea,
+            experienceYears: vendorProfile?.experienceYears,
+            serviceCategoryId: vendorProfile?.serviceCategoryId,
+            licenseDocumentUrl: vendorProfile?.licenseDocumentUrl,
+            phoneNumber: vendorProfile?.phoneNumber,
+            description: vendorProfile?.description,
           });
         } catch (vendorErr: any) {
           // Log error but don't fail registration - they can update profile later
@@ -395,8 +395,11 @@ async function start() {
     }
 
     try {
+      // Get the vendor ID from the user ID
+      const vendorId = await getVendorIdByUserId(user.id);
+      
       const slot = await createAvailabilitySlot({
-        vendorId: user.id,
+        vendorId,
         slotDate,
         startTime,
         endTime,
@@ -422,7 +425,10 @@ async function start() {
     }
 
     try {
-      await deleteAvailabilitySlot({ slotId, vendorId: user.id });
+      // Get the vendor ID from the user ID
+      const vendorId = await getVendorIdByUserId(user.id);
+      
+      await deleteAvailabilitySlot({ slotId, vendorId });
       res.status(200).json({ ok: true });
     } catch (err: any) {
       res.status(400).json({ error: err?.message ?? "Failed to delete slot" });

@@ -85,6 +85,34 @@ export async function getUserProfile(userId: number): Promise<UserProfile> {
   return { user, vendor };
 }
 
+export async function getVendorIdByUserId(userId: number): Promise<number> {
+  const pool = getPool();
+
+  const res = await pool.query<{ id: number }>(
+    `SELECT id FROM vendors WHERE user_id = $1 LIMIT 1`,
+    [userId]
+  );
+
+  const row = res.rows[0];
+  if (!row) {
+    // If vendor profile doesn't exist, create it
+    const insertRes = await pool.query<{ id: number }>(
+      `INSERT INTO vendors (user_id, business_name, service_area, experience_years, is_verified, 
+                           service_category_id, license_document_url, phone_number, description)
+       VALUES ($1, NULL, NULL, NULL, false, NULL, NULL, NULL, NULL)
+       RETURNING id`,
+      [userId]
+    );
+    
+    const newRow = insertRes.rows[0];
+    if (!newRow) throw new Error("Failed to create vendor profile");
+    
+    return newRow.id;
+  }
+
+  return row.id;
+}
+
 export async function updateUserName(userId: number, name: string | null): Promise<SessionUser> {
   const pool = getPool();
 

@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS vendors (
   CONSTRAINT vendors_user_unique UNIQUE (user_id)
 );
 
+-- Add additional vendor profile columns
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS service_category_id INTEGER;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS license_document_url VARCHAR;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS phone_number VARCHAR;
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS description TEXT;
+
 CREATE TABLE IF NOT EXISTS services (
   id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   vendor_id        INTEGER NOT NULL,
