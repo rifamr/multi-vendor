@@ -25,7 +25,7 @@ type ServiceType = {
   rating: number;
   reviews: number;
   category: { id: string; name: string };
-  vendor: { id: string; displayName: string };
+  vendor: { id: string; displayName: string; shopImageUrl?: string | null };
 };
 
 interface VendorServiceCardProps {
@@ -34,9 +34,10 @@ interface VendorServiceCardProps {
   avgRating: number;
   totalReviews: number;
   category: string;
+  vendorImage?: string | null;
 }
 
-function VendorServiceCard({ vendorName, services, avgRating, totalReviews, category }: VendorServiceCardProps) {
+function VendorServiceCard({ vendorName, services, avgRating, totalReviews, category, vendorImage }: VendorServiceCardProps) {
   const navigate = useNavigate();
   const [selectedServiceId, setSelectedServiceId] = useState(services[0].id);
 
@@ -53,7 +54,10 @@ function VendorServiceCard({ vendorName, services, avgRating, totalReviews, cate
       className="card-floating overflow-hidden group"
     >
       <div className="h-44 bg-muted relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        {vendorImage && (
+          <img src={vendorImage} alt={vendorName} className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">
           {category}
         </span>
@@ -152,7 +156,7 @@ export default function CustomerServices() {
       rating: number;
       reviews: number;
       category: { id: string; name: string };
-      vendor: { id: string; displayName: string };
+      vendor: { id: string; displayName: string; shopImageUrl?: string | null };
     }>;
 
   // Group services by vendor
@@ -173,6 +177,7 @@ export default function CustomerServices() {
       avgRating: vendorServices.reduce((sum, s) => sum + s.rating, 0) / vendorServices.length,
       totalReviews: vendorServices.reduce((sum, s) => sum + s.reviews, 0),
       category: vendorServices[0].category.name,
+      vendorImage: vendorServices[0].vendor.shopImageUrl,
     }));
   }, [services]);
 
@@ -292,6 +297,7 @@ export default function CustomerServices() {
                     avgRating={vendor.avgRating}
                     totalReviews={vendor.totalReviews}
                     category={vendor.category}
+                    vendorImage={vendor.vendorImage}
                   />
                 ))}
               </div>
