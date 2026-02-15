@@ -29,17 +29,18 @@ async function main() {
        ON CONFLICT (id) DO NOTHING;`
     );
 
-    // Users (vendors + one sample customer)
+    // Users (vendors + one sample customer + admin)
     await client.query(
-      `INSERT INTO users (id, name, email, role, auth_provider) OVERRIDING SYSTEM VALUE
+      `INSERT INTO users (id, name, email, role, auth_provider, password_hash) OVERRIDING SYSTEM VALUE
        VALUES
-        (1,'StyleHub Studio','stylehub@example.com','vendor','seed'),
-        (2,'CleanPro Services','cleanpro@example.com','vendor','seed'),
-        (3,'AutoShine Garage','autoshine@example.com','vendor','seed'),
-        (4,'LensArt Studio','lensart@example.com','vendor','seed'),
-        (5,'FitLife Gym','fitlife@example.com','vendor','seed'),
-        (6,'BrightMinds Academy','brightminds@example.com','vendor','seed'),
-        (100,'Demo Customer','customer@example.com','customer','seed')
+        (1,'StyleHub Studio','stylehub@example.com','vendor','seed',NULL),
+        (2,'CleanPro Services','cleanpro@example.com','vendor','seed',NULL),
+        (3,'AutoShine Garage','autoshine@example.com','vendor','seed',NULL),
+        (4,'LensArt Studio','lensart@example.com','vendor','seed',NULL),
+        (5,'FitLife Gym','fitlife@example.com','vendor','seed',NULL),
+        (6,'BrightMinds Academy','brightminds@example.com','vendor','seed',NULL),
+        (100,'Demo Customer','customer@example.com','customer','seed',NULL),
+        (101,'Admin','mrrifa@gmail.com','admin','local','$2b$10$m1DiVwmfT22xNZLxQfc4h.K.U9xwNvJ2Exv2Kt6Z0SkWKwRxUyLaG')
        ON CONFLICT (id) DO NOTHING;`
     );
 

@@ -6,20 +6,22 @@ import { Calendar, Check, X } from "lucide-react";
 
 type Booking = {
   id: number;
-  customer_id: number;
-  vendor_id: number;
-  service_id: number;
-  slot_id: number;
+  customerId: number;
+  vendorId: number;
+  serviceId: number;
+  slotId: number;
   status: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-  service_title: string;
-  service_price: number;
-  customer_email: string;
-  slot_date: string;
-  slot_start_time: string;
-  slot_end_time: string;
+  bookingDate: string | null;
+  serviceTitle: string;
+  servicePrice: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string | null;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+  paymentStatus?: string;
+  paymentAmount?: number;
 };
 
 const statusColors: Record<string, string> = {
@@ -105,8 +107,14 @@ export default function VendorBookings() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    if (!dateStr) return "Invalid Date";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return "Invalid Date";
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch {
+      return "Invalid Date";
+    }
   };
 
   return (
@@ -157,12 +165,17 @@ export default function VendorBookings() {
                     className="border-b border-border/50 hover:bg-muted/30 transition-colors"
                   >
                     <td className="px-5 py-3 text-foreground font-mono text-xs">#{b.id}</td>
-                    <td className="px-5 py-3 text-foreground">{b.customer_email}</td>
-                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{b.service_title}</td>
-                    <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">
-                      {formatDate(b.slot_date)} {b.slot_start_time}
+                    <td className="px-5 py-3">
+                      <div className="text-foreground font-medium">{b.customerName || 'N/A'}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {b.customerPhone || b.customerEmail}
+                      </div>
                     </td>
-                    <td className="px-5 py-3 text-foreground font-medium">${b.service_price}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{b.serviceTitle}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden md:table-cell">
+                      {b.slotDate ? `${formatDate(b.slotDate)} ${b.startTime || ''}` : 'No date set'}
+                    </td>
+                    <td className="px-5 py-3 text-foreground font-medium">₹{b.servicePrice}</td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[b.status] || "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}>
                         {b.status}
@@ -170,26 +183,6 @@ export default function VendorBookings() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex gap-1">
-                        {b.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(b.id, "accepted", "Accepted")}
-                              disabled={updating === b.id}
-                              className="px-2 py-1 rounded-lg bg-green-500/10 text-green-400 text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50 flex items-center gap-1"
-                              title="Accept booking"
-                            >
-                              <Check size={14} /> Accept
-                            </button>
-                            <button
-                              onClick={() => updateStatus(b.id, "rejected", "Rejected")}
-                              disabled={updating === b.id}
-                              className="px-2 py-1 rounded-lg bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50 flex items-center gap-1"
-                              title="Reject booking"
-                            >
-                              <X size={14} /> Reject
-                            </button>
-                          </>
-                        )}
                         {b.status === "accepted" && (
                           <button
                             onClick={() => updateStatus(b.id, "completed", "Completed")}
@@ -198,6 +191,18 @@ export default function VendorBookings() {
                           >
                             Mark Complete
                           </button>
+                        )}
+                        {(b.status === "pending" || b.status === "accepted") && (
+                          <button
+                            onClick={() => updateStatus(b.id, "cancelled", "Cancelled")}
+                            disabled={updating === b.id}
+                            className="px-2 py-1 rounded-lg bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {(b.status === "completed" || b.status === "cancelled") && (
+                          <span className="text-xs text-muted-foreground">No actions</span>
                         )}
                       </div>
                     </td>

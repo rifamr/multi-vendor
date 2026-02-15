@@ -41,7 +41,7 @@ export default function ServiceCard({ id, title, vendor, price, rating, reviews,
               <span className="text-xs text-white/60">({reviews})</span>
             </div>
             <div className="text-right">
-              <span className="text-lg font-bold text-white">${price}</span>
+              <span className="text-lg font-bold text-white">₹{price}</span>
               <span className="text-xs text-white/60 ml-1">/ {duration}</span>
             </div>
           </div>

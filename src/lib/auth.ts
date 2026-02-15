@@ -5,6 +5,7 @@ export type AuthUser = {
   email: string;
   role: AuthRole;
   name: string | null;
+  phone?: string | null;
   provider: "local" | "google";
 };
 

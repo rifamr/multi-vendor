@@ -1,9 +1,9 @@
 import { useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
-import { useState } from "react";
+import { Search, Star, ChevronDown } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
-import ServiceCard from "@/components/ServiceCard";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { GET_CATEGORIES, GET_SERVICES } from "@/graphql/serviceQueries";
 import {
@@ -15,6 +15,95 @@ import {
 } from "@/components/ui/select";
 
 type PriceRangeId = "UNDER_50" | "50_100" | "100_200" | "200_PLUS";
+
+type ServiceType = {
+  id: string;
+  title: string;
+  price: number;
+  duration: string;
+  image?: string | null;
+  rating: number;
+  reviews: number;
+  category: { id: string; name: string };
+  vendor: { id: string; displayName: string };
+};
+
+interface VendorServiceCardProps {
+  vendorName: string;
+  services: ServiceType[];
+  avgRating: number;
+  totalReviews: number;
+  category: string;
+}
+
+function VendorServiceCard({ vendorName, services, avgRating, totalReviews, category }: VendorServiceCardProps) {
+  const navigate = useNavigate();
+  const [selectedServiceId, setSelectedServiceId] = useState(services[0].id);
+
+  const selectedService = services.find(s => s.id === selectedServiceId) || services[0];
+
+  const handleViewService = () => {
+    navigate(`/customer/service/${selectedServiceId}`);
+  };
+
+  return (
+    <motion.div
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={{ type: "spring", stiffness: 300 }}
+      className="card-floating overflow-hidden group"
+    >
+      <div className="h-44 bg-muted relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">
+          {category}
+        </span>
+        <span className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/60 text-white text-xs font-medium">
+          {services.length} {services.length === 1 ? 'Service' : 'Services'}
+        </span>
+      </div>
+      <div className="p-5 bg-[#14100c]/90 border-t border-orange-500/15">
+        <h3 className="font-display font-semibold text-white text-base mb-1">
+          {vendorName}
+        </h3>
+        <div className="flex items-center gap-1 mb-3">
+          <Star size={14} className="fill-primary text-primary" />
+          <span className="text-sm font-medium text-white">{avgRating.toFixed(1)}</span>
+          <span className="text-xs text-white/60">({totalReviews} reviews)</span>
+        </div>
+
+        {/* Service Selector */}
+        <div className="mb-3">
+          <label className="text-xs text-white/70 mb-1.5 block">Available Services</label>
+          <Select value={selectedServiceId} onValueChange={setSelectedServiceId}>
+            <SelectTrigger className="bg-secondary/50 border-orange-500/20 text-white text-sm rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {services.map((service) => (
+                <SelectItem key={service.id} value={service.id}>
+                  {service.title} - ₹{service.price}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="text-left">
+            <span className="text-lg font-bold text-white">₹{selectedService.price}</span>
+            <span className="text-xs text-white/60 ml-1">/ {selectedService.duration}</span>
+          </div>
+          <button
+            onClick={handleViewService}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          >
+            View Details
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 function priceRangeToMinMax(id: PriceRangeId): { minPrice?: number; maxPrice?: number } {
   switch (id) {
@@ -65,6 +154,27 @@ export default function CustomerServices() {
       category: { id: string; name: string };
       vendor: { id: string; displayName: string };
     }>;
+
+  // Group services by vendor
+  const vendorGroups = useMemo(() => {
+    const groups = new Map<string, typeof services>();
+    services.forEach(service => {
+      const vendorId = service.vendor.id;
+      if (!groups.has(vendorId)) {
+        groups.set(vendorId, []);
+      }
+      groups.get(vendorId)!.push(service);
+    });
+    return Array.from(groups.entries()).map(([vendorId, vendorServices]) => ({
+      vendorId,
+      vendorName: vendorServices[0].vendor.displayName,
+      services: vendorServices,
+      // Use first service for display defaults
+      avgRating: vendorServices.reduce((sum, s) => sum + s.rating, 0) / vendorServices.length,
+      totalReviews: vendorServices.reduce((sum, s) => sum + s.reviews, 0),
+      category: vendorServices[0].category.name,
+    }));
+  }, [services]);
 
   return (
     <DashboardLayout role="customer">
@@ -117,10 +227,10 @@ export default function CustomerServices() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="any">Any price</SelectItem>
-                  <SelectItem value="UNDER_50">Under $50</SelectItem>
-                  <SelectItem value="50_100">$50 - $100</SelectItem>
-                  <SelectItem value="100_200">$100 - $200</SelectItem>
-                  <SelectItem value="200_PLUS">$200+</SelectItem>
+                  <SelectItem value="UNDER_50">Under ₹50</SelectItem>
+                  <SelectItem value="50_100">₹50 - ₹100</SelectItem>
+                  <SelectItem value="100_200">₹100 - ₹200</SelectItem>
+                  <SelectItem value="200_PLUS">₹200+</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -172,21 +282,16 @@ export default function CustomerServices() {
                   </div>
                 ))}
               </div>
-            ) : services.length > 0 ? (
+            ) : vendorGroups.length > 0 ? (
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                {services.map((service) => (
-                  <ServiceCard
-                    key={service.id}
-                    id={Number(service.id)}
-                    title={service.title}
-                    vendor={service.vendor.displayName}
-                    price={service.price}
-                    rating={service.rating}
-                    reviews={service.reviews}
-                    category={service.category.name}
-                    duration={service.duration}
-                    image={service.image ?? "/placeholder.svg"}
-                    linkBase="/customer/service"
+                {vendorGroups.map((vendor) => (
+                  <VendorServiceCard
+                    key={vendor.vendorId}
+                    vendorName={vendor.vendorName}
+                    services={vendor.services}
+                    avgRating={vendor.avgRating}
+                    totalReviews={vendor.totalReviews}
+                    category={vendor.category}
                   />
                 ))}
               </div>

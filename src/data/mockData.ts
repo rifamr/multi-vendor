@@ -50,9 +50,9 @@ export const vendorServices = [
 
 export const vendorBookings = [
   { id: "VB001", customer: "Sarah M.", service: "Premium Haircut", date: "2026-02-10", time: "10:00 AM", status: "pending" },
-  { id: "VB002", customer: "John D.", service: "Hair Coloring", date: "2026-02-10", time: "1:00 PM", status: "confirmed" },
+  { id: "VB002", customer: "John D.", service: "Hair Coloring", date: "2026-02-10", time: "1:00 PM", status: "accepted" },
   { id: "VB003", customer: "Emily L.", service: "Beard Trim", date: "2026-02-11", time: "9:30 AM", status: "pending" },
-  { id: "VB004", customer: "Mike T.", service: "Premium Haircut", date: "2026-02-11", time: "3:00 PM", status: "confirmed" },
+  { id: "VB004", customer: "Mike T.", service: "Premium Haircut", date: "2026-02-11", time: "3:00 PM", status: "accepted" },
 ];
 
 export const vendorEarnings = [

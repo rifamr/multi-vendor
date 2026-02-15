@@ -204,11 +204,11 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
   }
 }
 
-export const resolvers: Resolvers = {
+export const resolvers: any = {
   Query: {
     categories: async () => (await dbGetCategories()) ?? categories,
 
-    services: async (_parent, args) => {
+    services: async (_parent: any, args: any) => {
       const { filter, sort } = args;
 
       const dbRows = await dbGetServices({ filter, sort });
@@ -271,22 +271,122 @@ export const resolvers: Resolvers = {
       return withStats.map(({ s }) => s);
     },
 
-    service: async (_parent, args) => (await dbGetServiceById(args.id)) ?? (services.find((s) => s.id === args.id) ?? null),
+    service: async (_parent: any, args: any) => (await dbGetServiceById(args.id)) ?? (services.find((s) => s.id === args.id) ?? null),
+
+    serviceReviews: async (_parent: any, args: any) => {
+      const { getServiceReviews } = await import("./db/reviews");
+      const reviews = await getServiceReviews({ serviceId: Number(args.serviceId) });
+      return reviews.map((r: any) => ({
+        id: r.id.toString(),
+        bookingId: r.bookingId,
+        customerId: r.customerId,
+        customerName: r.customerName || "Anonymous",
+        serviceId: r.serviceId,
+        rating: r.rating,
+        comment: r.comment,
+        moderationStatus: r.moderationStatus,
+        createdAt: r.createdAt,
+      }));
+    },
+
+    serviceRatingStats: async (_parent: any, args: any) => {
+      const { getServiceRatingStats } = await import("./db/reviews");
+      const stats = await getServiceRatingStats(Number(args.serviceId));
+      return {
+        serviceId: stats.serviceId,
+        averageRating: stats.averageRating,
+        totalReviews: stats.totalReviews,
+        ratingDistribution: stats.ratingDistribution.map((d: any) => ({
+          rating: d.rating,
+          count: d.count,
+        })),
+      };
+    },
+
+    reviewAnalytics: async () => {
+      const pool = getPoolOptional();
+      if (!pool) {
+        return {
+          totalReviews: 0,
+          averageRating: 0,
+          pendingReviews: 0,
+          approvedReviews: 0,
+          rejectedReviews: 0,
+          recentReviews: [],
+        };
+      }
+
+      try {
+        // Get overall stats
+        const statsResult = await pool.query(`
+          SELECT
+            COUNT(*)::int as total_reviews,
+            COALESCE(AVG(rating), 0)::float as average_rating,
+            COUNT(CASE WHEN moderation_status = 'pending' THEN 1 END)::int as pending_reviews,
+            COUNT(CASE WHEN moderation_status = 'approved' THEN 1 END)::int as approved_reviews,
+            COUNT(CASE WHEN moderation_status = 'rejected' THEN 1 END)::int as rejected_reviews
+          FROM reviews
+        `);
+
+        // Get recent reviews
+        const recentResult = await pool.query(`
+          SELECT 
+            r.id, r.booking_id, r.customer_id, r.service_id, r.rating, r.comment,
+            r.moderation_status, r.created_at,
+            u.name as customer_name
+          FROM reviews r
+          JOIN users u ON u.id = r.customer_id
+          ORDER BY r.created_at DESC
+          LIMIT 10
+        `);
+
+        const stats = statsResult.rows[0];
+
+        return {
+          totalReviews: stats.total_reviews,
+          averageRating: stats.average_rating,
+          pendingReviews: stats.pending_reviews,
+          approvedReviews: stats.approved_reviews,
+          rejectedReviews: stats.rejected_reviews,
+          recentReviews: recentResult.rows.map((r) => ({
+            id: r.id.toString(),
+            bookingId: r.booking_id,
+            customerId: r.customer_id,
+            customerName: r.customer_name || "Anonymous",
+            serviceId: r.service_id,
+            rating: r.rating,
+            comment: r.comment,
+            moderationStatus: r.moderation_status,
+            createdAt: r.created_at.toISOString(),
+          })),
+        };
+      } catch (err) {
+        console.error("[reviewAnalytics] Error:", err);
+        return {
+          totalReviews: 0,
+          averageRating: 0,
+          pendingReviews: 0,
+          approvedReviews: 0,
+          rejectedReviews: 0,
+          recentReviews: [],
+        };
+      }
+    },
   },
 
   Service: {
-    price: (parent) => {
+    price: (parent: any) => {
       if (typeof parent.price === "number") return parent.price;
       if (typeof parent.priceCents === "number") return dollarsFromCents(parent.priceCents);
       return 0;
     },
-    duration: (parent) => {
+    duration: (parent: any) => {
       if (typeof parent.duration_minutes === "number") return formatDuration(parent.duration_minutes);
       if (typeof parent.durationMinutes === "number") return formatDuration(parent.durationMinutes);
       return "";
     },
-    image: (parent) => parent.image ?? parent.imageUrl ?? "/placeholder.svg",
-    category: (parent) => {
+    image: (parent: any) => parent.image ?? parent.imageUrl ?? "/placeholder.svg",
+    category: (parent: any) => {
       if (parent.category_id && parent.category_name) {
         return { id: parent.category_id, name: parent.category_name };
       }
@@ -294,7 +394,7 @@ export const resolvers: Resolvers = {
       if (!c) throw new Error(`Category not found for service ${parent.id}`);
       return c;
     },
-    vendor: (parent) => {
+    vendor: (parent: any) => {
       if (parent.vendor_id) {
         const { city, region } = parseServiceArea(parent.vendor_area ?? null);
         return {
@@ -308,11 +408,11 @@ export const resolvers: Resolvers = {
       if (!v) throw new Error(`Vendor not found for service ${parent.id}`);
       return v;
     },
-    rating: (parent) => {
+    rating: (parent: any) => {
       if (typeof parent.rating_avg === "number") return parent.rating_avg;
       return getServiceRatingStats(parent.id).avg;
     },
-    reviews: (parent) => {
+    reviews: (parent: any) => {
       if (typeof parent.reviews_count === "number") return parent.reviews_count;
       return getServiceRatingStats(parent.id).count;
     },

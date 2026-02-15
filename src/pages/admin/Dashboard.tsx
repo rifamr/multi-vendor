@@ -111,7 +111,7 @@ export default function AdminDashboard() {
           />
           <StatCard
             label="Revenue"
-            value={`$${((stats?.totalRevenue || 0) / 1000).toFixed(0)}K`}
+            value={`₹${((stats?.totalRevenue || 0) / 1000).toFixed(0)}K`}
             icon={DollarSign}
             trend={formatTrend(stats?.revenueTrend || 0)}
             trendUp={(stats?.revenueTrend || 0) >= 0}

@@ -23,6 +23,7 @@ const sidebarMenus: Record<Role, { label: string; path: string; icon: React.Elem
     { label: "Dashboard", path: "/vendor/dashboard", icon: LayoutDashboard },
     { label: "My Services", path: "/vendor/services", icon: Store },
     { label: "Bookings", path: "/vendor/bookings", icon: Calendar },
+    { label: "Reviews", path: "/vendor/reviews", icon: Star },
     { label: "Earnings", path: "/vendor/earnings", icon: DollarSign },
     { label: "Profile", path: "/vendor/profile", icon: User },
     { label: "Notifications", path: "/vendor/notifications", icon: Bell },

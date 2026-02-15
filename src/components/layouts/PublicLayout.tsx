@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import RoleSwitcher from "@/components/RoleSwitcher";
@@ -114,8 +114,14 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               </div>
             ))}
           </div>
-          <div className="mt-8 pt-8 border-t border-border text-center">
+          <div className="mt-8 pt-8 border-t border-border flex items-center justify-between">
             <p className="text-sm text-muted-foreground">2026 ServiceBook. All rights reserved.</p>
+            <Link
+              to="/admin/login"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ShieldCheck size={14} /> Admin Portal
+            </Link>
           </div>
         </div>
       </footer>

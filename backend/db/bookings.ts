@@ -5,10 +5,12 @@ export type BookingStatus = "pending" | "accepted" | "rejected" | "completed" | 
 export type AvailabilitySlot = {
   id: number;
   vendorId: number;
+  serviceId?: number;
   slotDate: string;
   startTime: string;
   endTime: string;
   isAvailable: boolean;
+  serviceName?: string;
 };
 
 export type Booking = {
@@ -20,6 +22,7 @@ export type Booking = {
   bookingDate: string;
   customerName: string | null;
   customerEmail: string;
+  customerPhone: string | null;
   serviceTitle: string;
   servicePrice: number | null;
   vendorId: number;
@@ -52,7 +55,8 @@ export async function getAvailableSlots(params: {
 
   if (params.serviceId) {
     values.push(params.serviceId);
-    where.push(`services.id = $${values.length}`);
+    // Match slots linked to this service OR generic vendor slots (service_id IS NULL)
+    where.push(`(slots.service_id = $${values.length} OR slots.service_id IS NULL)`);
   }
 
   // Always filter by date - show only current and future slots
@@ -67,12 +71,14 @@ export async function getAvailableSlots(params: {
     SELECT
       slots.id,
       slots.vendor_id AS "vendorId",
+      slots.service_id AS "serviceId",
       slots.slot_date::text AS "slotDate",
       slots.start_time::text AS "startTime",
       slots.end_time::text AS "endTime",
-      slots.is_available AS "isAvailable"
+      slots.is_available AS "isAvailable",
+      services.title AS "serviceName"
     FROM availability_slots slots
-    ${params.serviceId ? "JOIN services ON services.vendor_id = slots.vendor_id" : ""}
+    LEFT JOIN services ON services.id = slots.service_id
     ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
     ORDER BY slots.slot_date ASC, slots.start_time ASC
     LIMIT 100
@@ -168,6 +174,7 @@ export async function getBookingById(id: number): Promise<Booking | null> {
       b.booking_date::text AS "bookingDate",
       u.name AS "customerName",
       u.email AS "customerEmail",
+      u.phone AS "customerPhone",
       s.title AS "serviceTitle",
       s.price::float AS "servicePrice",
       v.id AS "vendorId",
@@ -205,7 +212,7 @@ export async function listBookings(params: {
 
   if (params.vendorId) {
     values.push(params.vendorId);
-    where.push(`v.id = $${values.length}`);
+    where.push(`v.user_id = $${values.length}`);
   }
 
   if (params.status) {
@@ -226,18 +233,22 @@ export async function listBookings(params: {
       b.booking_date::text AS "bookingDate",
       u.name AS "customerName",
       u.email AS "customerEmail",
+      u.phone AS "customerPhone",
       s.title AS "serviceTitle",
       s.price::float AS "servicePrice",
       v.id AS "vendorId",
       v.business_name AS "vendorName",
       slots.slot_date::text AS "slotDate",
       slots.start_time::text AS "startTime",
-      slots.end_time::text AS "endTime"
+      slots.end_time::text AS "endTime",
+      p.payment_status AS "paymentStatus",
+      p.amount::float AS "paymentAmount"
     FROM bookings b
     JOIN users u ON u.id = b.customer_id
     JOIN services s ON s.id = b.service_id
     JOIN vendors v ON v.id = s.vendor_id
     JOIN availability_slots slots ON slots.id = b.slot_id
+    LEFT JOIN payments p ON p.booking_id = b.id
     ${whereClause}
     ORDER BY slots.slot_date DESC, slots.start_time DESC
     LIMIT $${values.length + 1}
@@ -386,6 +397,7 @@ export async function rescheduleBooking(params: {
 
 export async function createAvailabilitySlot(params: {
   vendorId: number;
+  serviceId?: number;
   slotDate: string;
   startTime: string;
   endTime: string;
@@ -393,10 +405,10 @@ export async function createAvailabilitySlot(params: {
   const pool = getPool();
 
   const result = await pool.query<{ id: number }>(
-    `INSERT INTO availability_slots (vendor_id, slot_date, start_time, end_time, is_available)
-     VALUES ($1, $2::date, $3::time, $4::time, true)
+    `INSERT INTO availability_slots (vendor_id, service_id, slot_date, start_time, end_time, is_available)
+     VALUES ($1, $2, $3::date, $4::time, $5::time, true)
      RETURNING id`,
-    [params.vendorId, params.slotDate, params.startTime, params.endTime]
+    [params.vendorId, params.serviceId || null, params.slotDate, params.startTime, params.endTime]
   );
 
   const slotId = result.rows[0]?.id;
@@ -405,6 +417,7 @@ export async function createAvailabilitySlot(params: {
   return {
     id: slotId,
     vendorId: params.vendorId,
+    serviceId: params.serviceId,
     slotDate: params.slotDate,
     startTime: params.startTime,
     endTime: params.endTime,
@@ -418,14 +431,14 @@ export async function deleteAvailabilitySlot(params: {
 }): Promise<void> {
   const pool = getPool();
 
-  // Check if slot has any bookings
+  // Check if slot has ANY bookings (including cancelled/rejected)
   const bookingCheck = await pool.query<{ count: number }>(
-    `SELECT COUNT(*)::int AS count FROM bookings WHERE slot_id = $1 AND status NOT IN ('rejected', 'cancelled')`,
+    `SELECT COUNT(*)::int AS count FROM bookings WHERE slot_id = $1`,
     [params.slotId]
   );
 
   if ((bookingCheck.rows[0]?.count ?? 0) > 0) {
-    throw new Error("Cannot delete a slot with active bookings");
+    throw new Error("Cannot delete a slot with existing bookings. Please mark the slot as unavailable instead.");
   }
 
   const result = await pool.query(

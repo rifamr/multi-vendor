@@ -118,10 +118,10 @@ export default function Services() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="any">Any price</SelectItem>
-                  <SelectItem value="UNDER_50">Under $50</SelectItem>
-                  <SelectItem value="50_100">$50 - $100</SelectItem>
-                  <SelectItem value="100_200">$100 - $200</SelectItem>
-                  <SelectItem value="200_PLUS">$200+</SelectItem>
+                  <SelectItem value="UNDER_50">Under ₹50</SelectItem>
+                  <SelectItem value="50_100">₹50 - ₹100</SelectItem>
+                  <SelectItem value="100_200">₹100 - ₹200</SelectItem>
+                  <SelectItem value="200_PLUS">₹200+</SelectItem>
                 </SelectContent>
               </Select>
             </div>

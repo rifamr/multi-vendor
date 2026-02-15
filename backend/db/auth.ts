@@ -9,6 +9,7 @@ export type SessionUser = {
   email: string;
   role: AuthRole;
   name: string | null;
+  phone?: string | null;
   provider: "local" | "google";
 };
 

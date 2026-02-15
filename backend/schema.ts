@@ -24,6 +24,39 @@ export const typeDefs = /* GraphQL */ `
     reviews: Int!           # number of reviews
   }
 
+  type Review {
+    id: ID!
+    bookingId: Int!
+    customerId: Int!
+    customerName: String!
+    serviceId: Int!
+    rating: Int!
+    comment: String
+    moderationStatus: String!
+    createdAt: String!
+  }
+
+  type RatingDistribution {
+    rating: Int!
+    count: Int!
+  }
+
+  type RatingStats {
+    serviceId: Int!
+    averageRating: Float!
+    totalReviews: Int!
+    ratingDistribution: [RatingDistribution!]!
+  }
+
+  type ReviewAnalytics {
+    totalReviews: Int!
+    averageRating: Float!
+    pendingReviews: Int!
+    approvedReviews: Int!
+    rejectedReviews: Int!
+    recentReviews: [Review!]!
+  }
+
   input ServiceFilter {
     search: String
     categoryId: ID
@@ -43,5 +76,10 @@ export const typeDefs = /* GraphQL */ `
     categories: [Category!]!
     services(filter: ServiceFilter, sort: ServiceSort = RELEVANCE): [Service!]!
     service(id: ID!): Service
+    
+    # Review queries
+    serviceReviews(serviceId: ID!): [Review!]!
+    serviceRatingStats(serviceId: ID!): RatingStats!
+    reviewAnalytics: ReviewAnalytics!
   }
 `;

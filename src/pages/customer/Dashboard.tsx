@@ -16,11 +16,11 @@ type CustomerStats = {
 
 type Booking = {
   id: number;
-  service_title: string;
-  vendor_display_name: string;
-  service_price: number;
-  slot_date: string;
-  slot_start_time: string;
+  serviceTitle: string;
+  vendorName: string;
+  servicePrice: number;
+  slotDate: string;
+  startTime: string;
   status: string;
 };
 
@@ -114,7 +114,7 @@ export default function CustomerDashboard() {
             trend={formatTrend(stats?.bookingsTrend || 0)}
             trendUp={(stats?.bookingsTrend || 0) >= 0}
           />
-          <StatCard label="Total Spent" value={`$${stats?.totalSpent.toLocaleString() || 0}`} icon={DollarSign} />
+          <StatCard label="Total Spent" value={`₹${stats?.totalSpent.toLocaleString() || 0}`} icon={DollarSign} />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
@@ -136,13 +136,13 @@ export default function CustomerDashboard() {
                     className="flex items-center justify-between p-3 rounded-xl bg-background/50 border border-border"
                   >
                     <div>
-                      <p className="font-medium text-sm text-foreground">{booking.service_title}</p>
+                      <p className="font-medium text-sm text-foreground">{booking.serviceTitle}</p>
                       <p className="text-xs text-muted-foreground">
-                        {booking.vendor_display_name} — {formatDate(booking.slot_date)} at {booking.slot_start_time}
+                        {booking.vendorName} — {formatDate(booking.slotDate)} at {booking.startTime}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-foreground">${booking.service_price}</span>
+                      <span className="text-sm font-medium text-foreground">₹{booking.servicePrice}</span>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[booking.status] || "bg-gray-500/10 text-gray-400 border-gray-500/20"}`}
                       >
@@ -168,10 +168,10 @@ export default function CustomerDashboard() {
                   .map((b, i) => (
                     <div key={i} className="p-3 rounded-xl bg-background/50 border border-border">
                       <p className="text-sm text-foreground">
-                        Your booking for {b.service_title} is confirmed
+                        Your booking for {b.serviceTitle} is confirmed
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(b.slot_date)} at {b.slot_start_time}
+                        {formatDate(b.slotDate)} at {b.startTime}
                       </p>
                     </div>
                   ))

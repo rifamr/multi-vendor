@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS users (
 -- Auth additions (local email/password)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
+-- Phone number for contact
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR;
+
 -- Role should be present for the role-based auth rules.
 UPDATE users SET role = 'customer' WHERE role IS NULL;
 ALTER TABLE users ALTER COLUMN role SET NOT NULL;
@@ -72,6 +75,16 @@ CREATE TABLE IF NOT EXISTS availability_slots (
   CONSTRAINT availability_slots_vendor_fk FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
 );
 
+-- Add service_id column to link slots to specific services
+ALTER TABLE availability_slots ADD COLUMN IF NOT EXISTS service_id INTEGER;
+
+DO $$ BEGIN
+  ALTER TABLE availability_slots ADD CONSTRAINT availability_slots_service_fk 
+    FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS bookings (
   id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   customer_id      INTEGER NOT NULL,
@@ -96,12 +109,49 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS reviews (
   id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   booking_id       INTEGER NOT NULL,
-  rating           INTEGER,
+  customer_id      INTEGER NOT NULL,
+  service_id       INTEGER NOT NULL,
+  rating           INTEGER NOT NULL,
   comment          TEXT,
-  created_at       TIMESTAMP,
+  moderation_status VARCHAR DEFAULT 'pending',
+  created_at       TIMESTAMP DEFAULT NOW(),
   CONSTRAINT reviews_booking_fk FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
-  CONSTRAINT reviews_rating_range CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5))
+  CONSTRAINT reviews_customer_fk FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT reviews_service_fk FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+  CONSTRAINT reviews_rating_range CHECK (rating >= 1 AND rating <= 5),
+  CONSTRAINT reviews_booking_unique UNIQUE (booking_id)
 );
+
+-- Add columns to existing reviews table if they don't exist
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS customer_id INTEGER;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_id INTEGER;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS moderation_status VARCHAR DEFAULT 'pending';
+
+-- Add foreign key constraints if they don't exist
+DO $$ BEGIN
+  ALTER TABLE reviews ADD CONSTRAINT reviews_customer_fk FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE reviews ADD CONSTRAINT reviews_service_fk FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Add unique constraint on booking_id
+DO $$ BEGIN
+  ALTER TABLE reviews ADD CONSTRAINT reviews_booking_unique UNIQUE (booking_id);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN others THEN 
+    IF SQLERRM LIKE '%already exists%' THEN
+      NULL;
+    ELSE
+      RAISE;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS notifications (
   id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

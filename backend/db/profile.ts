@@ -27,8 +27,9 @@ export async function getUserProfile(userId: number): Promise<UserProfile> {
     role: AuthRole;
     name: string | null;
     auth_provider: string | null;
+    phone: string | null;
   }>(
-    `SELECT id, email, role, name, auth_provider
+    `SELECT id, email, role, name, auth_provider, phone
      FROM users
      WHERE id = $1
      LIMIT 1`,
@@ -43,6 +44,7 @@ export async function getUserProfile(userId: number): Promise<UserProfile> {
     email: row.email,
     role: row.role,
     name: row.name,
+    phone: row.phone,
     provider: row.auth_provider === "google" ? "google" : "local",
   };
 
@@ -113,10 +115,28 @@ export async function getVendorIdByUserId(userId: number): Promise<number> {
   return row.id;
 }
 
-export async function updateUserName(userId: number, name: string | null): Promise<SessionUser> {
+export async function updateUserProfile(userId: number, name: string | null, phone?: string | null): Promise<SessionUser> {
   const pool = getPool();
 
   const nextName = name?.trim() ? name.trim() : null;
+  const nextPhone = phone !== undefined ? (phone?.trim() ? phone.trim() : null) : undefined;
+
+  let sql: string;
+  let params: any[];
+
+  if (nextPhone !== undefined) {
+    sql = `UPDATE users
+     SET name = $1, phone = $2
+     WHERE id = $3
+     RETURNING id, email, role, name, auth_provider, phone`;
+    params = [nextName, nextPhone, userId];
+  } else {
+    sql = `UPDATE users
+     SET name = $1
+     WHERE id = $2
+     RETURNING id, email, role, name, auth_provider, phone`;
+    params = [nextName, userId];
+  }
 
   const res = await pool.query<{
     id: number;
@@ -124,13 +144,8 @@ export async function updateUserName(userId: number, name: string | null): Promi
     role: AuthRole;
     name: string | null;
     auth_provider: string | null;
-  }>(
-    `UPDATE users
-     SET name = $1
-     WHERE id = $2
-     RETURNING id, email, role, name, auth_provider`,
-    [nextName, userId]
-  );
+    phone: string | null;
+  }>(sql, params);
 
   const row = res.rows[0];
   if (!row) throw new Error("User not found");
@@ -141,6 +156,7 @@ export async function updateUserName(userId: number, name: string | null): Promi
     role: row.role,
     name: row.name,
     provider: row.auth_provider === "google" ? "google" : "local",
+    phone: row.phone,
   };
 }
 

@@ -1,11 +1,13 @@
 import { useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, Clock, MapPin, Star, User } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, MapPin, MessageSquare, Star, User } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { GET_SERVICE_BY_ID } from "@/graphql/serviceQueries";
+import { useAuth } from "@/auth/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 type AvailabilitySlot = {
   id: number;
@@ -16,11 +18,25 @@ type AvailabilitySlot = {
   isAvailable: boolean;
 };
 
+type Review = {
+  id: number;
+  rating: number;
+  comment: string | null;
+  customerName: string | null;
+  createdAt: string;
+};
+
 export default function CustomerServiceDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [availableSlots, setAvailableSlots] = useState<AvailabilitySlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [showReviews, setShowReviews] = useState(false);
 
   const serviceId = id ?? "1";
   const { data, loading, error } = useQuery(GET_SERVICE_BY_ID, {
@@ -49,7 +65,7 @@ export default function CustomerServiceDetails() {
     const fetchSlots = async () => {
       setLoadingSlots(true);
       try {
-        const url = `/api/availability?serviceId=${serviceId}&fromDate=${new Date().toISOString().split("T")[0]}`;
+        const url = `/api/availability?serviceId=${serviceId}&fromDate=${new Date().toISOString().split("T")[0]}&includeBooked=true`;
         const response = await fetch(url, { credentials: "include" });
         const result = await response.json();
         if (result.ok) {
@@ -65,6 +81,34 @@ export default function CustomerServiceDetails() {
     fetchSlots();
   }, [serviceId]);
 
+  // Fetch reviews
+  useEffect(() => {
+    if (!serviceId) return;
+    fetch(`/api/services/${serviceId}/reviews`, { credentials: "include" })
+      .then(res => res.json())
+      .then(result => {
+        if (result.ok) setReviews(result.reviews ?? []);
+      })
+      .catch(() => {});
+  }, [serviceId]);
+
+  // Get unique sorted dates from available slots
+  const availableDates = [...new Set(availableSlots.map(s => s.slotDate))].sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime()
+  );
+
+  // Auto-select first available date when slots load
+  useEffect(() => {
+    if (availableDates.length > 0 && !selectedDate) {
+      setSelectedDate(availableDates[0]);
+    }
+  }, [availableSlots]);
+
+  // Filter slots by selected date
+  const filteredSlots = selectedDate
+    ? availableSlots.filter(s => s.slotDate === selectedDate)
+    : availableSlots;
+
   // Format time from "09:00" to "9:00 AM"
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
@@ -74,9 +118,48 @@ export default function CustomerServiceDetails() {
     return `${displayHour}:${minutes} ${period}`;
   };
 
+  const formatSlotDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
   const selectedSlotDetails = selectedSlot
     ? availableSlots.find((s) => s.id === selectedSlot)
     : null;
+
+  const handleBookNow = () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to book this service.",
+        variant: "destructive",
+      });
+      navigate("/login");
+      return;
+    }
+
+    if (!selectedSlot || !selectedSlotDetails) {
+      toast({
+        title: "No Slot Selected",
+        description: "Please select a time slot first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Navigate to checkout with booking details
+    const params = new URLSearchParams({
+      serviceId,
+      slotId: String(selectedSlot),
+      serviceTitle: service?.title || '',
+      vendorName: service?.vendor.displayName || '',
+      price: String(service?.price || 0),
+      slotDate: selectedSlotDetails.slotDate,
+      slotTime: formatTime(selectedSlotDetails.startTime),
+    });
+
+    navigate(`/customer/checkout?${params.toString()}`);
+  };
 
   return (
     <DashboardLayout role="customer">
@@ -139,26 +222,60 @@ export default function CustomerServiceDetails() {
                 <h3 className="font-display font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Calendar size={18} className="text-primary" /> Available Time Slots
                 </h3>
+
+                {/* Date Picker */}
                 {loadingSlots ? (
                   <div className="text-sm text-muted-foreground">Loading available slots...</div>
-                ) : availableSlots.length === 0 ? (
+                ) : availableDates.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No available slots at the moment. Please check back later.</div>
                 ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                    {availableSlots.map((slot) => (
-                      <button
-                        key={slot.id}
-                        onClick={() => setSelectedSlot(slot.id)}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          selectedSlot === slot.id
-                            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                            : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
-                        }`}
-                      >
-                        {formatTime(slot.startTime)}
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="mb-4">
+                      <label className="text-xs font-medium text-muted-foreground mb-2 block">Select Date</label>
+                      <div className="flex flex-wrap gap-2">
+                        {availableDates.map((date) => (
+                          <button
+                            key={date}
+                            onClick={() => { setSelectedDate(date); setSelectedSlot(null); }}
+                            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                              selectedDate === date
+                                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                                : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
+                            }`}
+                          >
+                            {formatSlotDate(date)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {filteredSlots.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No available slots for this date. Try another date.</div>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                        {filteredSlots
+                          .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                          .map((slot) => (
+                          <button
+                            key={slot.id}
+                            onClick={() => slot.isAvailable && setSelectedSlot(slot.id)}
+                            disabled={!slot.isAvailable}
+                            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                              !slot.isAvailable
+                                ? "bg-red-500/10 text-red-400 border border-red-500/20 cursor-not-allowed opacity-60 line-through"
+                                : selectedSlot === slot.id
+                                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                                : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
+                            }`}
+                            title={!slot.isAvailable ? "This slot is already booked" : "Click to select this slot"}
+                          >
+                            {formatTime(slot.startTime)}
+                            {!slot.isAvailable && <span className="block text-[10px] no-underline" style={{ textDecoration: 'none' }}>Booked</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             </div>
@@ -168,29 +285,33 @@ export default function CustomerServiceDetails() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="card-floating p-6 bg-gradient-to-b from-orange-100/90 to-orange-50/85 border border-orange-300/60 shadow-xl shadow-orange-500/15"
+                className="card-floating p-6 bg-gradient-to-b from-primary/20 to-primary/10 border border-primary/30 shadow-xl shadow-primary/15"
               >
                 <div className="mb-4">
-                  <span className="text-3xl font-display font-bold text-slate-900">${service.price}</span>
-                  <span className="text-sm text-slate-600 ml-1">/ session</span>
+                  <span className="text-3xl font-display font-bold text-foreground">₹{service.price}</span>
+                  <span className="text-sm text-muted-foreground ml-1">/ session</span>
                 </div>
                 <div className="space-y-3 mb-6 text-sm">
-                  <div className="flex justify-between text-slate-900">
+                  <div className="flex justify-between text-foreground">
                     <span>Duration</span>
                     <span className="font-medium">{service.duration}</span>
                   </div>
-                  <div className="flex justify-between text-slate-900">
+                  <div className="flex justify-between text-foreground">
                     <span>Category</span>
                     <span className="font-medium">{service.category.name}</span>
                   </div>
                   {selectedSlotDetails && (
-                    <div className="flex justify-between text-slate-900">
+                    <div className="flex justify-between text-foreground">
                       <span>Selected</span>
                       <span className="font-medium text-primary">{formatTime(selectedSlotDetails.startTime)}</span>
                     </div>
                   )}
                 </div>
-                <button className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25">
+                <button 
+                  onClick={handleBookNow}
+                  disabled={!selectedSlot}
+                  className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   Book Now
                 </button>
               </motion.div>
@@ -212,6 +333,30 @@ export default function CustomerServiceDetails() {
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <MapPin size={12} /> {service.vendor.city}, {service.vendor.region}
                 </div>
+                <button
+                  onClick={() => setShowReviews(!showReviews)}
+                  className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                >
+                  <MessageSquare size={14} />
+                  {reviews.length > 0 ? `Reviews (${reviews.length})` : "No Reviews Yet"}
+                </button>
+                {showReviews && reviews.length > 0 && (
+                  <div className="mt-3 space-y-3 max-h-60 overflow-y-auto">
+                    {reviews.map((r) => (
+                      <div key={r.id} className="p-3 rounded-xl bg-muted/50 border border-border">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-foreground">{r.customerName || "Customer"}</span>
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} size={10} className={i < r.rating ? "fill-primary text-primary" : "text-muted-foreground/30"} />
+                            ))}
+                          </div>
+                        </div>
+                        {r.comment && <p className="text-xs text-muted-foreground">{r.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
           </div>

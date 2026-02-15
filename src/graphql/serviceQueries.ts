@@ -57,3 +57,55 @@ export const GET_SERVICE_BY_ID = gql`
     }
   }
 `;
+
+export const GET_SERVICE_REVIEWS = gql`
+  query GetServiceReviews($serviceId: ID!) {
+    serviceReviews(serviceId: $serviceId) {
+      id
+      bookingId
+      customerId
+      customerName
+      rating
+      comment
+      moderationStatus
+      createdAt
+    }
+  }
+`;
+
+export const GET_SERVICE_RATING_STATS = gql`
+  query GetServiceRatingStats($serviceId: ID!) {
+    serviceRatingStats(serviceId: $serviceId) {
+      serviceId
+      averageRating
+      totalReviews
+      ratingDistribution {
+        rating
+        count
+      }
+    }
+  }
+`;
+
+export const GET_REVIEW_ANALYTICS = gql`
+  query GetReviewAnalytics {
+    reviewAnalytics {
+      totalReviews
+      averageRating
+      pendingReviews
+      approvedReviews
+      rejectedReviews
+      recentReviews {
+        id
+        bookingId
+        customerId
+        customerName
+        serviceId
+        rating
+        comment
+        moderationStatus
+        createdAt
+      }
+    }
+  }
+`;

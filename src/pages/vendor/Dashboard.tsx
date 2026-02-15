@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { DollarSign, Calendar, Star, TrendingUp } from "lucide-react";
+import { DollarSign, Calendar, Star, TrendingUp, BarChart3 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import StatCard from "@/components/StatCard";
@@ -26,12 +26,19 @@ type RatingDistribution = {
   percentage: number;
 };
 
+type MostBookedService = {
+  serviceId: number;
+  title: string;
+  bookingCount: number;
+  totalRevenue: number;
+};
+
 type RecentBooking = {
   id: number;
-  customer_email: string;
-  service_title: string;
-  slot_date: string;
-  slot_start_time: string;
+  customerEmail: string;
+  serviceTitle: string;
+  slotDate: string;
+  startTime: string;
   status: string;
 };
 
@@ -47,6 +54,7 @@ export default function VendorDashboard() {
   const [monthlyEarnings, setMonthlyEarnings] = useState<MonthlyEarnings[]>([]);
   const [ratingDistribution, setRatingDistribution] = useState<RatingDistribution[]>([]);
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+  const [mostBookedServices, setMostBookedServices] = useState<MostBookedService[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,6 +70,9 @@ export default function VendorDashboard() {
           setStats(analyticsData.stats);
           setMonthlyEarnings(analyticsData.monthlyEarnings);
           setRatingDistribution(analyticsData.ratingDistribution);
+          if (analyticsData.mostBookedServices) {
+            setMostBookedServices(analyticsData.mostBookedServices);
+          }
         }
 
         // Fetch recent bookings
@@ -113,7 +124,7 @@ export default function VendorDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Total Earnings"
-            value={`$${stats?.totalEarnings.toLocaleString() || 0}`}
+            value={`₹${stats?.totalEarnings.toLocaleString() || 0}`}
             icon={DollarSign}
             trend={formatTrend(stats?.earningsTrend || 0)}
             trendUp={(stats?.earningsTrend || 0) >= 0}
@@ -128,7 +139,7 @@ export default function VendorDashboard() {
           <StatCard label="Avg Rating" value={stats?.avgRating.toFixed(1) || "0.0"} icon={Star} />
           <StatCard
             label="This Month"
-            value={`$${stats?.thisMonthEarnings.toLocaleString() || 0}`}
+            value={`₹${stats?.thisMonthEarnings.toLocaleString() || 0}`}
             icon={TrendingUp}
             trend={formatTrend(stats?.earningsTrend || 0)}
             trendUp={(stats?.earningsTrend || 0) >= 0}
@@ -184,6 +195,45 @@ export default function VendorDashboard() {
           </div>
         </div>
 
+        {/* Most Booked Services */}
+        {mostBookedServices.length > 0 && (
+          <div className="rounded-2xl bg-secondary border border-border p-5">
+            <h3 className="font-display font-semibold text-foreground mb-4 flex items-center gap-2">
+              <BarChart3 size={18} className="text-primary" /> Most Booked Services
+            </h3>
+            <div className="space-y-3">
+              {mostBookedServices.map((s, i) => {
+                const maxCount = mostBookedServices[0]?.bookingCount || 1;
+                const percentage = (s.bookingCount / maxCount) * 100;
+                return (
+                  <motion.div
+                    key={s.serviceId}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">{s.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {s.bookingCount} booking{s.bookingCount !== 1 ? 's' : ''} · ₹{s.totalRevenue.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentage}%` }}
+                        transition={{ duration: 0.6, delay: i * 0.1 }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Recent Bookings */}
         <div className="rounded-2xl bg-secondary border border-border p-5">
           <h3 className="font-display font-semibold text-foreground mb-4">Pending Bookings</h3>
@@ -203,10 +253,10 @@ export default function VendorDashboard() {
                 >
                   <div>
                     <p className="font-medium text-sm text-foreground">
-                      {b.customer_email} — {b.service_title}
+                      {b.customerEmail} — {b.serviceTitle}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(b.slot_date)} at {b.slot_start_time}
+                      {formatDate(b.slotDate)} at {b.startTime}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

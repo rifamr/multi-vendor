@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@apollo/client";
 import { GET_CATEGORIES } from "@/graphql/serviceQueries";
+import { useSearchParams } from "react-router-dom";
 
 type VendorProfile = {
   businessName: string | null;
@@ -38,6 +39,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export default function VendorProfile() {
   const auth = useAuth();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +55,17 @@ export default function VendorProfile() {
   const email = auth.user?.email ?? "";
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
   const headerName = useMemo(() => (businessName.trim() ? businessName.trim() : ownerName?.trim() ? ownerName : email), [businessName, ownerName, email]);
+
+  // Show setup message if coming from OAuth signup
+  useEffect(() => {
+    if (searchParams.get('setup') === 'true') {
+      toast({
+        title: "Welcome! Complete Your Profile",
+        description: "Please fill in your vendor details to start offering services.",
+        duration: 6000,
+      });
+    }
+  }, [searchParams, toast]);
 
   useEffect(() => {
     setOwnerName(auth.user?.name ?? "");
