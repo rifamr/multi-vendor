@@ -1,4 +1,4 @@
-import { User, Mail, Phone, MapPin, Camera, Store, Briefcase, FileText } from "lucide-react";
+import { User, Mail, Phone, MapPin, Camera, Store, Briefcase, FileText, ImagePlus, X } from "lucide-react";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { motion } from "framer-motion";
 import { useAuth } from "@/auth/AuthContext";
@@ -51,6 +51,7 @@ export default function VendorProfile() {
   const [serviceCategoryId, setServiceCategoryId] = useState("");
   const [description, setDescription] = useState("");
   const [licenseDocumentUrl, setLicenseDocumentUrl] = useState("");
+  const [shopImageUrl, setShopImageUrl] = useState<string | null>(null);
 
   const email = auth.user?.email ?? "";
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
@@ -85,6 +86,7 @@ export default function VendorProfile() {
         setServiceCategoryId(v?.serviceCategoryId != null ? String(v.serviceCategoryId) : "");
         setDescription(v?.description ?? "");
         setLicenseDocumentUrl(v?.licenseDocumentUrl ?? "");
+        setShopImageUrl(v?.shopImageUrl ?? null);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load profile";
         toast({ title: "Profile load failed", description: message, variant: "destructive" });
@@ -112,6 +114,7 @@ export default function VendorProfile() {
           serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : null,
           description,
           licenseDocumentUrl,
+          shopImageUrl: shopImageUrl ?? null,
         }),
       });
       await auth.refresh();
@@ -129,13 +132,41 @@ export default function VendorProfile() {
       <div className="max-w-2xl space-y-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-secondary border border-border p-6">
           <div className="flex items-center gap-4 mb-6">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center">
-                <Store size={32} className="text-muted-foreground" />
-              </div>
-              <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center">
+            <div className="relative group">
+              {shopImageUrl ? (
+                <div className="w-20 h-20 rounded-2xl overflow-hidden relative">
+                  <img src={shopImageUrl} alt="Shop" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => setShopImageUrl(null)}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} className="text-destructive-foreground" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center">
+                  <Store size={32} className="text-muted-foreground" />
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors">
                 <Camera size={12} className="text-primary-foreground" />
-              </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast({ title: "Image too large", description: "Max 5MB allowed.", variant: "destructive" });
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setShopImageUrl(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
             </div>
             <div>
               <h3 className="font-display font-semibold text-foreground">{headerName || "Vendor"}</h3>

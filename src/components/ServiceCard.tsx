@@ -12,10 +12,11 @@ interface ServiceCardProps {
   category: string;
   duration: string;
   image: string;
+  vendorImage?: string | null;
   linkBase?: string;
 }
 
-export default function ServiceCard({ id, title, vendor, price, rating, reviews, category, duration, linkBase = "/service" }: ServiceCardProps) {
+export default function ServiceCard({ id, title, vendor, price, rating, reviews, category, duration, vendorImage, linkBase = "/service" }: ServiceCardProps) {
   return (
     <Link to={`${linkBase}/${id}`}>
       <motion.div
@@ -24,7 +25,10 @@ export default function ServiceCard({ id, title, vendor, price, rating, reviews,
         className="card-floating overflow-hidden group cursor-pointer"
       >
         <div className="h-44 bg-muted relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          {vendorImage && (
+            <img src={vendorImage} alt={vendor} className="absolute inset-0 w-full h-full object-cover" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">
             {category}
           </span>

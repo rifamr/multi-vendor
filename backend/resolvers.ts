@@ -14,6 +14,7 @@ type DbServiceRow = {
   vendor_id: string;
   vendor_name: string | null;
   vendor_area: string | null;
+  vendor_shop_image_url: string | null;
   rating_avg: number;
   reviews_count: number;
 };
@@ -77,6 +78,7 @@ async function dbGetServiceById(id: string): Promise<DbServiceRow | null> {
         v.id::text AS vendor_id,
         v.business_name AS vendor_name,
         v.service_area AS vendor_area,
+        v.shop_image_url AS vendor_shop_image_url,
         COALESCE(AVG(r.rating), 0)::float AS rating_avg,
         COUNT(r.id)::int AS reviews_count
       FROM services s
@@ -88,7 +90,7 @@ async function dbGetServiceById(id: string): Promise<DbServiceRow | null> {
       GROUP BY
         s.id, s.title, s.description, s.price, s.duration_minutes, s.is_active,
         s.category_id, sc.name,
-        v.id, v.business_name, v.service_area
+        v.id, v.business_name, v.service_area, v.shop_image_url
       `,
       [id]
     );
@@ -174,6 +176,7 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
       v.id::text AS vendor_id,
       v.business_name AS vendor_name,
       v.service_area AS vendor_area,
+      v.shop_image_url AS vendor_shop_image_url,
       COALESCE(AVG(r.rating), 0)::float AS rating_avg,
       COUNT(r.id)::int AS reviews_count
     FROM services s
@@ -185,7 +188,7 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
     GROUP BY
       s.id, s.title, s.description, s.price, s.duration_minutes, s.is_active,
       s.category_id, sc.name,
-      v.id, v.business_name, v.service_area
+      v.id, v.business_name, v.service_area, v.shop_image_url
     ${havingClause}
     ${orderBy}
   `;
@@ -402,6 +405,7 @@ export const resolvers: any = {
           displayName: parent.vendor_name ?? "",
           city,
           region,
+          shopImageUrl: parent.vendor_shop_image_url ?? null,
         };
       }
       const v = vendors.find((x) => x.id === parent.vendorId);

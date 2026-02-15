@@ -11,6 +11,7 @@ export type VendorProfile = {
   licenseDocumentUrl: string | null;
   phoneNumber: string | null;
   description: string | null;
+  shopImageUrl: string | null;
 };
 
 export type UserProfile = {
@@ -61,9 +62,10 @@ export async function getUserProfile(userId: number): Promise<UserProfile> {
     license_document_url: string | null;
     phone_number: string | null;
     description: string | null;
+    shop_image_url: string | null;
   }>(
     `SELECT business_name, service_area, experience_years, is_verified,
-            service_category_id, license_document_url, phone_number, description
+            service_category_id, license_document_url, phone_number, description, shop_image_url
      FROM vendors
      WHERE user_id = $1
      LIMIT 1`,
@@ -81,6 +83,7 @@ export async function getUserProfile(userId: number): Promise<UserProfile> {
         licenseDocumentUrl: vendorRow.license_document_url,
         phoneNumber: vendorRow.phone_number,
         description: vendorRow.description,
+        shopImageUrl: vendorRow.shop_image_url,
       }
     : null;
 
@@ -169,6 +172,7 @@ export async function upsertVendorProfile(params: {
   licenseDocumentUrl?: string | null;
   phoneNumber?: string | null;
   description?: string | null;
+  shopImageUrl?: string | null;
 }): Promise<VendorProfile> {
   const pool = getPool();
 
@@ -185,6 +189,7 @@ export async function upsertVendorProfile(params: {
   const licenseDocumentUrl = params.licenseDocumentUrl?.trim() ? params.licenseDocumentUrl.trim() : null;
   const phoneNumber = params.phoneNumber?.trim() ? params.phoneNumber.trim() : null;
   const description = params.description?.trim() ? params.description.trim() : null;
+  const shopImageUrl = params.shopImageUrl !== undefined ? (params.shopImageUrl?.trim() ? params.shopImageUrl.trim() : null) : undefined;
 
   // Ensure vendor row exists.
   await pool.query(
@@ -205,6 +210,14 @@ export async function upsertVendorProfile(params: {
      licenseDocumentUrl, phoneNumber, description]
   );
 
+  // Update shop image separately (can be explicitly set to null to remove)
+  if (shopImageUrl !== undefined) {
+    await pool.query(
+      `UPDATE vendors SET shop_image_url = $1 WHERE user_id = $2`,
+      [shopImageUrl, params.userId]
+    );
+  }
+
   const vendorRes = await pool.query<{
     business_name: string | null;
     service_area: string | null;
@@ -214,9 +227,10 @@ export async function upsertVendorProfile(params: {
     license_document_url: string | null;
     phone_number: string | null;
     description: string | null;
+    shop_image_url: string | null;
   }>(
     `SELECT business_name, service_area, experience_years, is_verified,
-            service_category_id, license_document_url, phone_number, description
+            service_category_id, license_document_url, phone_number, description, shop_image_url
      FROM vendors
      WHERE user_id = $1
      LIMIT 1`,
@@ -235,5 +249,6 @@ export async function upsertVendorProfile(params: {
     licenseDocumentUrl: vendorRow.license_document_url,
     phoneNumber: vendorRow.phone_number,
     description: vendorRow.description,
+    shopImageUrl: vendorRow.shop_image_url,
   };
 }

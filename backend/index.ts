@@ -141,7 +141,7 @@ async function start() {
     })
   );
 
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
   app.use(cookieParser());
 
@@ -357,6 +357,7 @@ async function start() {
         const licenseDocumentUrl = typeof body.licenseDocumentUrl === "string" ? body.licenseDocumentUrl : undefined;
         const phoneNumber = typeof body.phoneNumber === "string" ? body.phoneNumber : undefined;
         const description = typeof body.description === "string" ? body.description : undefined;
+        const shopImageUrl = typeof body.shopImageUrl === "string" ? body.shopImageUrl : undefined;
 
         vendorProfile = await upsertVendorProfile({
           userId: updatedUser.id,
@@ -367,6 +368,7 @@ async function start() {
           licenseDocumentUrl,
           phoneNumber,
           description,
+          shopImageUrl,
         });
       }
 

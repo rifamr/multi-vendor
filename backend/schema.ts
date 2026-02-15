@@ -9,6 +9,7 @@ export const typeDefs = /* GraphQL */ `
     displayName: String!
     city: String!
     region: String!
+    shopImageUrl: String
   }
 
   type Service {

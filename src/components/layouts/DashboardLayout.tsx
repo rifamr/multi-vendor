@@ -201,9 +201,13 @@ export default function DashboardLayout({ children, role }: { children: React.Re
               </div>
             )}
             <RoleSwitcher />
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+            <Link
+              to={role === "admin" ? "/admin/dashboard" : `/${role}/profile`}
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+              title="Profile"
+            >
               <User size={16} className="text-muted-foreground" />
-            </div>
+            </Link>
           </div>
         </header>
 

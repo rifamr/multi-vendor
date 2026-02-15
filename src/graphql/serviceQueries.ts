@@ -28,6 +28,7 @@ export const GET_SERVICES = gql`
         displayName
         city
         region
+        shopImageUrl
       }
     }
   }
@@ -53,6 +54,7 @@ export const GET_SERVICE_BY_ID = gql`
         displayName
         city
         region
+        shopImageUrl
       }
     }
   }

@@ -56,7 +56,7 @@ export default function ServiceDetails() {
         rating: number;
         reviews: number;
         category: { id: string; name: string };
-        vendor: { id: string; displayName: string; city: string; region: string };
+        vendor: { id: string; displayName: string; city: string; region: string; shopImageUrl?: string | null };
       }
     | undefined;
 
@@ -367,8 +367,12 @@ export default function ServiceDetails() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card-floating p-6">
               <h3 className="font-display font-semibold text-card-foreground mb-4 text-sm">About the Vendor</h3>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                  <User size={18} className="text-muted-foreground" />
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                  {service.vendor.shopImageUrl ? (
+                    <img src={service.vendor.shopImageUrl} alt={service.vendor.displayName} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={18} className="text-muted-foreground" />
+                  )}
                 </div>
                 <div>
                   <p className="font-medium text-sm text-card-foreground">{service.vendor.displayName}</p>

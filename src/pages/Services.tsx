@@ -62,7 +62,7 @@ export default function Services() {
       rating: number;
       reviews: number;
       category: { id: string; name: string };
-      vendor: { id: string; displayName: string };
+      vendor: { id: string; displayName: string; shopImageUrl?: string | null };
     }>;
 
   return (
@@ -188,6 +188,7 @@ export default function Services() {
                     category={service.category.name}
                     duration={service.duration}
                     image={service.image ?? "/placeholder.svg"}
+                    vendorImage={service.vendor.shopImageUrl}
                   />
                 ))}
               </div>

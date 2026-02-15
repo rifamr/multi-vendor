@@ -573,7 +573,7 @@ export default function CustomerBookings() {
               <div className="space-y-4">
                 {/* Date buttons */}
                 {(() => {
-                  const uniqueDates = [...new Set(rescheduleSlots.map(s => s.date))].sort();
+                  const uniqueDates = [...new Set(rescheduleSlots.map(s => s.slotDate))].sort();
                   return uniqueDates.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {uniqueDates.map(d => (
@@ -599,7 +599,7 @@ export default function CustomerBookings() {
                 {rescheduleSelectedDate && (
                   <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                     {rescheduleSlots
-                      .filter(s => s.date === rescheduleSelectedDate)
+                      .filter(s => s.slotDate === rescheduleSelectedDate)
                       .map(slot => (
                         <button
                           key={slot.id}
