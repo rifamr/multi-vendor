@@ -54,7 +54,7 @@ export default function CustomerServiceDetails() {
         rating: number;
         reviews: number;
         category: { id: string; name: string };
-        vendor: { id: string; displayName: string; city: string; region: string };
+        vendor: { id: string; displayName: string; city: string; region: string; shopImageUrl?: string | null };
       }
     | undefined;
 
@@ -197,7 +197,10 @@ export default function CustomerServiceDetails() {
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl bg-muted h-64 md:h-80 overflow-hidden relative">
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                {service.vendor.shopImageUrl && (
+                  <img src={service.vendor.shopImageUrl} alt={service.vendor.displayName} className="absolute inset-0 w-full h-full object-cover" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <span className="absolute top-4 left-4 px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">
                   {service.category.name}
                 </span>
