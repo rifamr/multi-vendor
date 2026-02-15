@@ -175,21 +175,148 @@ export default function CustomerBookings() {
       const result = await response.json();
 
       if (result.ok) {
-        // Create a JSON file and trigger download
-        const invoiceData = JSON.stringify(result.invoice, null, 2);
-        const blob = new Blob([invoiceData], { type: "application/json" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${result.invoice.invoiceNumber}.json`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        const inv = result.invoice;
+        const formatDate = (d: string) => {
+          if (!d) return "N/A";
+          return new Date(d).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" });
+        };
+        const formatTime = (t: string) => {
+          if (!t) return "";
+          const [h, m] = t.split(":");
+          const hr = parseInt(h);
+          const ampm = hr >= 12 ? "PM" : "AM";
+          return `${hr % 12 || 12}:${m} ${ampm}`;
+        };
+
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Invoice ${inv.invoiceNumber}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; background: #fff; padding: 40px; }
+    .invoice-container { max-width: 800px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #f97316; padding-bottom: 20px; margin-bottom: 30px; }
+    .header h1 { font-size: 32px; color: #f97316; font-weight: 700; }
+    .header .invoice-meta { text-align: right; font-size: 14px; color: #555; }
+    .header .invoice-meta strong { color: #1a1a1a; display: block; font-size: 16px; }
+    .section { margin-bottom: 25px; }
+    .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #f97316; font-weight: 600; margin-bottom: 8px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .info-box { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 16px; }
+    .info-box h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .info-box p { font-size: 13px; color: #666; line-height: 1.6; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #f97316; color: #fff; text-align: left; padding: 10px 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    th:first-child { border-radius: 6px 0 0 0; }
+    th:last-child { border-radius: 0 6px 0 0; text-align: right; }
+    td { padding: 12px 14px; border-bottom: 1px solid #eee; font-size: 14px; }
+    td:last-child { text-align: right; font-weight: 600; }
+    .total-row { background: #fff7ed; }
+    .total-row td { font-size: 16px; font-weight: 700; color: #f97316; border-bottom: none; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .badge-paid { background: #dcfce7; color: #166534; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; font-size: 12px; color: #999; }
+    @media print { body { padding: 20px; } .invoice-container { max-width: 100%; } }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <div class="header">
+      <div>
+        <h1>INVOICE</h1>
+        <p style="color:#888; font-size:14px; margin-top:4px;">GigConnect Forge</p>
+      </div>
+      <div class="invoice-meta">
+        <strong>${inv.invoiceNumber}</strong>
+        <span>Date: ${formatDate(inv.invoiceDate)}</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="info-grid">
+        <div class="info-box">
+          <div class="section-title">Billed To</div>
+          <h3>${inv.customer?.name || "Customer"}</h3>
+          <p>${inv.customer?.email || ""}</p>
+        </div>
+        <div class="info-box">
+          <div class="section-title">Service Provider</div>
+          <h3>${inv.vendor?.businessName || inv.vendor?.name || "Vendor"}</h3>
+          <p>${inv.vendor?.email || ""}</p>
+          <p>${inv.vendor?.serviceArea || ""}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Appointment Details</div>
+      <div class="info-box">
+        <p><strong>Date:</strong> ${formatDate(inv.appointment?.date)}</p>
+        <p><strong>Time:</strong> ${formatTime(inv.appointment?.startTime)} – ${formatTime(inv.appointment?.endTime)}</p>
+        <p><strong>Status:</strong> <span class="badge ${inv.bookingStatus === "completed" ? "badge-paid" : "badge-pending"}">${(inv.bookingStatus || "").toUpperCase()}</span></p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Service Breakdown</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Duration</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${inv.service?.title || "Service"}</td>
+            <td>${inv.service?.category || ""}</td>
+            <td>${inv.service?.duration || 0} min</td>
+            <td>₹${Number(inv.service?.price || 0).toFixed(2)}</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="3">Total</td>
+            <td>₹${Number(inv.payment?.amount || inv.service?.price || 0).toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Payment Information</div>
+      <div class="info-box">
+        <p><strong>Payment Status:</strong> <span class="badge ${inv.payment?.status === "paid" ? "badge-paid" : "badge-pending"}">${(inv.payment?.status || "pending").toUpperCase()}</span></p>
+        ${inv.payment?.date ? `<p><strong>Payment Date:</strong> ${formatDate(inv.payment.date)}</p>` : ""}
+        ${inv.payment?.id ? `<p><strong>Payment ID:</strong> #${inv.payment.id}</p>` : ""}
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Thank you for choosing GigConnect Forge!</p>
+      <p>This is a computer-generated invoice and does not require a signature.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        // Open a print window to allow PDF save
+        const printWindow = window.open("", "_blank");
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
 
         toast({
-          title: "Invoice Downloaded",
-          description: "Your invoice has been downloaded successfully.",
+          title: "Invoice Generated",
+          description: "Use 'Save as PDF' in the print dialog to download.",
         });
       } else {
         toast({
