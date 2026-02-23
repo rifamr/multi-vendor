@@ -228,7 +228,7 @@ export default function CustomerBookings() {
     <div class="header">
       <div>
         <h1>INVOICE</h1>
-        <p style="color:#888; font-size:14px; margin-top:4px;">GigConnect Forge</p>
+        <p style="color:#888; font-size:14px; margin-top:4px;">Multi vendor market place</p>
       </div>
       <div class="invoice-meta">
         <strong>${inv.invoiceNumber}</strong>
@@ -297,7 +297,7 @@ export default function CustomerBookings() {
     </div>
 
     <div class="footer">
-      <p>Thank you for choosing GigConnect Forge!</p>
+      <p>Thank you for choosing Multi vendor market place !</p>
       <p>This is a computer-generated invoice and does not require a signature.</p>
     </div>
   </div>
