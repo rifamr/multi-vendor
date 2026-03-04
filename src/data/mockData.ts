@@ -19,12 +19,7 @@ export const serviceCategories = [
 ];
 
 export const featuredServices = [
-  { id: 1, title: "Premium Haircut & Styling", vendor: "StyleHub Studio", price: 45, rating: 4.9, reviews: 128, category: "Beauty & Spa", duration: "45 min", image: "/placeholder.svg" },
-  { id: 2, title: "Deep House Cleaning", vendor: "CleanPro Services", price: 120, rating: 4.8, reviews: 95, category: "Home Services", duration: "3 hrs", image: "/placeholder.svg" },
-  { id: 3, title: "Full Car Detailing", vendor: "AutoShine Garage", price: 89, rating: 4.7, reviews: 73, category: "Auto Care", duration: "2 hrs", image: "/placeholder.svg" },
-  { id: 4, title: "Portrait Photography", vendor: "LensArt Studio", price: 150, rating: 4.9, reviews: 64, category: "Photography", duration: "1 hr", image: "/placeholder.svg" },
-  { id: 5, title: "Personal Training Session", vendor: "FitLife Gym", price: 60, rating: 4.6, reviews: 112, category: "Fitness", duration: "1 hr", image: "/placeholder.svg" },
-  { id: 6, title: "Math Tutoring", vendor: "BrightMinds Academy", price: 35, rating: 4.8, reviews: 87, category: "Tutoring", duration: "1 hr", image: "/placeholder.svg" },
+
 ];
 
 export const testimonials = [

@@ -108,7 +108,7 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
   if (!pool) return null;
 
   const { filter, sort } = args;
-  const where: string[] = ["COALESCE(s.is_active, true) = true"]; 
+  const where: string[] = ["COALESCE(s.is_active, true) = true"];
   const values: Array<string | number> = [];
 
   if (filter?.categoryId) {
@@ -139,6 +139,12 @@ async function dbGetServices(args: { filter?: any; sort?: any }): Promise<DbServ
   if (hasMinRating) {
     values.push(filter.minRating);
     havingClause = `HAVING COALESCE(AVG(r.rating), 0) >= $${values.length}`;
+  }
+
+  if (filter?.location && String(filter.location).trim().length > 0) {
+    const loc = `%${String(filter.location).trim()}%`;
+    values.push(loc);
+    where.push(`v.city ILIKE $${values.length}`);
   }
 
   let orderBy = "ORDER BY s.id ASC";

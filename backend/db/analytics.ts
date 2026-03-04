@@ -71,7 +71,9 @@ export async function getVendorStats(vendorId: number): Promise<VendorStats> {
   );
 
   const lastMonthEarnings = Number(lastMonthResult.rows[0]?.last_month_earnings || 0);
-  const earningsTrend = lastMonthEarnings > 0 ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100 : 0;
+  const earningsTrend = (thisMonthEarnings > 0 && lastMonthEarnings > 0)
+    ? ((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100
+    : 0;
 
   // This month bookings count
   const thisMonthBookingsResult = await pool.query<{ this_month_bookings: string }>(
@@ -100,7 +102,9 @@ export async function getVendorStats(vendorId: number): Promise<VendorStats> {
   );
 
   const lastMonthBookings = Number(lastMonthBookingsResult.rows[0]?.last_month_bookings || 0);
-  const bookingsTrend = lastMonthBookings > 0 ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100 : 0;
+  const bookingsTrend = (thisMonthBookings > 0 && lastMonthBookings > 0)
+    ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100
+    : 0;
 
   // Average rating (placeholder - reviews not yet implemented)
   const avgRating = 4.8;
@@ -346,7 +350,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     `
   );
   const lastMonthUsers = Number(lastMonthUsersResult.rows[0]?.last_month_users || 0);
-  const usersTrend = lastMonthUsers > 0 ? ((thisMonthUsers - lastMonthUsers) / lastMonthUsers) * 100 : 0;
+  const usersTrend = (thisMonthUsers > 0 && lastMonthUsers > 0)
+    ? ((thisMonthUsers - lastMonthUsers) / lastMonthUsers) * 100
+    : 0;
 
   // Vendors trend
   const thisMonthVendorsResult = await pool.query<{ this_month_vendors: string }>(
@@ -368,7 +374,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     `
   );
   const lastMonthVendors = Number(lastMonthVendorsResult.rows[0]?.last_month_vendors || 0);
-  const vendorsTrend = lastMonthVendors > 0 ? ((thisMonthVendors - lastMonthVendors) / lastMonthVendors) * 100 : 0;
+  const vendorsTrend = (thisMonthVendors > 0 && lastMonthVendors > 0)
+    ? ((thisMonthVendors - lastMonthVendors) / lastMonthVendors) * 100
+    : 0;
 
   // Bookings trend
   const thisMonthBookingsResult = await pool.query<{ this_month_bookings: string }>(
@@ -388,7 +396,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     `
   );
   const lastMonthBookings = Number(lastMonthBookingsResult.rows[0]?.last_month_bookings || 0);
-  const bookingsTrend = lastMonthBookings > 0 ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100 : 0;
+  const bookingsTrend = (thisMonthBookings > 0 && lastMonthBookings > 0)
+    ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100
+    : 0;
 
   // Revenue trend
   const thisMonthRevenueResult = await pool.query<{ this_month_revenue: string | null }>(
@@ -412,7 +422,9 @@ export async function getAdminStats(): Promise<AdminStats> {
     `
   );
   const lastMonthRevenue = Number(lastMonthRevenueResult.rows[0]?.last_month_revenue || 0);
-  const revenueTrend = lastMonthRevenue > 0 ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
+  const revenueTrend = (thisMonthRevenue > 0 && lastMonthRevenue > 0)
+    ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
+    : 0;
 
   return {
     totalUsers,
@@ -554,7 +566,9 @@ export async function getCustomerStats(customerId: number): Promise<CustomerStat
     [customerId]
   );
   const lastMonthBookings = Number(lastMonthBookingsResult.rows[0]?.last_month_bookings || 0);
-  const bookingsTrend = lastMonthBookings > 0 ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100 : 0;
+  const bookingsTrend = (thisMonthBookings > 0 && lastMonthBookings > 0)
+    ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100
+    : 0;
 
   // This month spent
   const thisMonthSpentResult = await pool.query<{ this_month_spent: string | null }>(
@@ -583,7 +597,9 @@ export async function getCustomerStats(customerId: number): Promise<CustomerStat
     [customerId]
   );
   const lastMonthSpent = Number(lastMonthSpentResult.rows[0]?.last_month_spent || 0);
-  const spentTrend = lastMonthSpent > 0 ? ((thisMonthSpent - lastMonthSpent) / lastMonthSpent) * 100 : 0;
+  const spentTrend = (thisMonthSpent > 0 && lastMonthSpent > 0)
+    ? ((thisMonthSpent - lastMonthSpent) / lastMonthSpent) * 100
+    : 0;
 
   return {
     totalBookings,

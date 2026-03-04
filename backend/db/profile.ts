@@ -4,7 +4,10 @@ import type { AuthRole, SessionUser } from "./auth";
 
 export type VendorProfile = {
   businessName: string | null;
-  serviceArea: string | null;
+  state: string | null;
+  district: string | null;
+  city: string | null;
+  address: string | null;
   experienceYears: number | null;
   isVerified: boolean | null;
   serviceCategoryId: number | null;
@@ -166,7 +169,10 @@ export async function updateUserProfile(userId: number, name: string | null, pho
 export async function upsertVendorProfile(params: {
   userId: number;
   businessName?: string | null;
-  serviceArea?: string | null;
+  state?: string | null;
+  district?: string | null;
+  city?: string | null;
+  address?: string | null;
   experienceYears?: number | null;
   serviceCategoryId?: number | null;
   licenseDocumentUrl?: string | null;
@@ -177,7 +183,10 @@ export async function upsertVendorProfile(params: {
   const pool = getPool();
 
   const businessName = params.businessName?.trim() ? params.businessName.trim() : null;
-  const serviceArea = params.serviceArea?.trim() ? params.serviceArea.trim() : null;
+  const state = params.state?.trim() ? params.state.trim() : null;
+  const district = params.district?.trim() ? params.district.trim() : null;
+  const city = params.city?.trim() ? params.city.trim() : null;
+  const address = params.address?.trim() ? params.address.trim() : null;
   const experienceYears =
     typeof params.experienceYears === "number" && Number.isFinite(params.experienceYears)
       ? Math.trunc(params.experienceYears)
@@ -193,20 +202,23 @@ export async function upsertVendorProfile(params: {
 
   // Ensure vendor row exists.
   await pool.query(
-    `INSERT INTO vendors (user_id, business_name, service_area, experience_years, is_verified,
+    `INSERT INTO vendors (user_id, business_name, state, district, city, address, experience_years, is_verified,
                           service_category_id, license_document_url, phone_number, description)
-     VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10, $11)
      ON CONFLICT (user_id)
      DO UPDATE SET
        business_name = COALESCE(EXCLUDED.business_name, vendors.business_name),
-       service_area = COALESCE(EXCLUDED.service_area, vendors.service_area),
+       state = COALESCE(EXCLUDED.state, vendors.state),
+       district = COALESCE(EXCLUDED.district, vendors.district),
+       city = COALESCE(EXCLUDED.city, vendors.city),
+       address = COALESCE(EXCLUDED.address, vendors.address),
        experience_years = COALESCE(EXCLUDED.experience_years, vendors.experience_years),
        service_category_id = COALESCE(EXCLUDED.service_category_id, vendors.service_category_id),
        license_document_url = COALESCE(EXCLUDED.license_document_url, vendors.license_document_url),
        phone_number = COALESCE(EXCLUDED.phone_number, vendors.phone_number),
        description = COALESCE(EXCLUDED.description, vendors.description)
      `,
-    [params.userId, businessName, serviceArea, experienceYears, serviceCategoryId, 
+    [params.userId, businessName, state, district, city, address, experienceYears, serviceCategoryId, 
      licenseDocumentUrl, phoneNumber, description]
   );
 
@@ -220,7 +232,10 @@ export async function upsertVendorProfile(params: {
 
   const vendorRes = await pool.query<{
     business_name: string | null;
-    service_area: string | null;
+    state: string | null;
+    district: string | null;
+    city: string | null;
+    address: string | null;
     experience_years: number | null;
     is_verified: boolean | null;
     service_category_id: number | null;
@@ -229,7 +244,7 @@ export async function upsertVendorProfile(params: {
     description: string | null;
     shop_image_url: string | null;
   }>(
-    `SELECT business_name, service_area, experience_years, is_verified,
+    `SELECT business_name, state, district, city, address, experience_years, is_verified,
             service_category_id, license_document_url, phone_number, description, shop_image_url
      FROM vendors
      WHERE user_id = $1
@@ -242,7 +257,10 @@ export async function upsertVendorProfile(params: {
 
   return {
     businessName: vendorRow.business_name,
-    serviceArea: vendorRow.service_area,
+    state: vendorRow.state,
+    district: vendorRow.district,
+    city: vendorRow.city,
+    address: vendorRow.address,
     experienceYears: vendorRow.experience_years,
     isVerified: vendorRow.is_verified,
     serviceCategoryId: vendorRow.service_category_id,

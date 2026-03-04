@@ -64,6 +64,7 @@ export const typeDefs = /* GraphQL */ `
     minPrice: Float
     maxPrice: Float
     minRating: Float
+    location: String
   }
 
   enum ServiceSort {

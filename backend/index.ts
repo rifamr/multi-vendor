@@ -55,6 +55,18 @@ import {
   notifyVendorForBooking,
   notifyCustomerForBooking,
 } from "./db/notifications";
+import {
+  chatGetCustomerBookingSummary,
+  chatGetCustomerRecentBookings,
+  chatGetVendorBookingSummary,
+  chatGetVendorRecentBookings,
+  chatGetVendorEarnings,
+  chatGetVendorServiceCount,
+  chatSearchServices,
+  chatGetAdminStats,
+} from "./db/chatbot";
+import { Groq } from "groq-sdk";
+import { retrieveRAGContext } from "./db/rag";
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -129,6 +141,11 @@ function clearAuthCookie(res: express.Response): void {
 async function start() {
   const app = express();
 
+  // Initialize Groq client for RAG chatbot
+  const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
+  });
+
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:8080";
   const backendUrl = process.env.BACKEND_URL ?? `http://localhost:${PORT}`;
 
@@ -184,6 +201,17 @@ async function start() {
     );
   }
 
+
+  // --- Chatbot Route ---
+  // Import chatbot router
+  try {
+    // Use dynamic import for ESModule default export
+    const { default: chatbotRouter } = await import("../routes/chatbot.js");
+    app.use("/api/chatbot", chatbotRouter);
+  } catch (err) {
+    console.error("Failed to load chatbot route:", err);
+  }
+
   app.get("/health", (_req, res) => res.status(200).send("ok"));
 
   // ---- OAuth / Session Auth ----
@@ -204,7 +232,7 @@ async function start() {
       }
 
       const user = await registerLocalUser({ email, password, role, name });
-      
+
       // If registering as vendor, always create vendor profile (even if empty)
       if (role === "vendor") {
         console.log("[POST /auth/register] Creating vendor profile with data:", vendorProfile);
@@ -212,7 +240,10 @@ async function start() {
           const createdVendorProfile = await upsertVendorProfile({
             userId: user.id,
             businessName: vendorProfile?.businessName,
-            serviceArea: vendorProfile?.serviceArea,
+            state: vendorProfile?.state,
+            district: vendorProfile?.district,
+            city: vendorProfile?.city,
+            address: vendorProfile?.address,
             experienceYears: vendorProfile?.experienceYears,
             serviceCategoryId: vendorProfile?.serviceCategoryId,
             licenseDocumentUrl: vendorProfile?.licenseDocumentUrl,
@@ -345,7 +376,10 @@ async function start() {
       let vendorProfile: any = null;
       if (updatedUser.role === "vendor") {
         const businessName = typeof body.businessName === "string" ? body.businessName : undefined;
-        const serviceArea = typeof body.serviceArea === "string" ? body.serviceArea : undefined;
+        const state = typeof body.state === "string" ? body.state : undefined;
+        const district = typeof body.district === "string" ? body.district : undefined;
+        const city = typeof body.city === "string" ? body.city : undefined;
+        const address = typeof body.address === "string" ? body.address : undefined;
         const experienceYearsRaw = body.experienceYears;
         const experienceYears =
           typeof experienceYearsRaw === "number"
@@ -362,7 +396,10 @@ async function start() {
         vendorProfile = await upsertVendorProfile({
           userId: updatedUser.id,
           businessName,
-          serviceArea,
+          state,
+          district,
+          city,
+          address,
           experienceYears: typeof experienceYears === "number" && Number.isFinite(experienceYears) ? experienceYears : null,
           serviceCategoryId,
           licenseDocumentUrl,
@@ -391,18 +428,18 @@ async function start() {
   // Get available slots (optional filters: vendorId, serviceId, fromDate)
   app.get("/api/availability", async (req, res) => {
     const user = getAuthUserFromRequest(req);
-    
+
     try {
       let vendorId = req.query.vendorId ? Number(req.query.vendorId) : undefined;
       let includeBooked = req.query.includeBooked === "true";
-      
+
       // If user is a vendor and no vendorId specified, use their vendor ID and include booked slots
       if (user && user.role === "vendor" && !vendorId) {
         vendorId = await getVendorIdByUserId(user.id);
         includeBooked = true; // Vendors see all their slots (booked and available)
         console.log("[GET /api/availability] User ID:", user.id, "Vendor ID:", vendorId, "Include Booked:", includeBooked);
       }
-      
+
       const serviceId = req.query.serviceId ? Number(req.query.serviceId) : undefined;
       const fromDate = typeof req.query.fromDate === "string" ? req.query.fromDate : undefined;
 
@@ -445,7 +482,7 @@ async function start() {
       // Get the vendor ID from the user ID
       const vendorId = await getVendorIdByUserId(user.id);
       console.log("[POST /api/availability] User ID:", user.id, "Vendor ID:", vendorId, "Service ID:", serviceId, "Date:", slotDate, "Time:", startTime, "-", endTime);
-      
+
       const slot = await createAvailabilitySlot({
         vendorId,
         serviceId: serviceId ? Number(serviceId) : undefined,
@@ -478,7 +515,7 @@ async function start() {
     try {
       // Get the vendor ID from the user ID
       const vendorId = await getVendorIdByUserId(user.id);
-      
+
       await deleteAvailabilitySlot({ slotId, vendorId });
       res.status(200).json({ ok: true });
     } catch (err: any) {
@@ -590,8 +627,8 @@ async function start() {
         }
       }
 
-      res.status(200).json({ 
-        ok: true, 
+      res.status(200).json({
+        ok: true,
         slotsGenerated: generatedSlots.length,
         slots: generatedSlots,
         message: `Generated ${generatedSlots.length} time slots based on service duration (${durationMinutes} mins + ${breakMinutes} mins break)`
@@ -686,7 +723,7 @@ async function start() {
 
     try {
       const pool = getPool();
-      
+
       // Get service price
       const serviceResult = await pool.query(
         `SELECT price FROM services WHERE id = $1`,
@@ -732,9 +769,9 @@ async function start() {
           await notifyVendorForBooking(booking.id, `New booking #${booking.id} received for "${svcTitle}".`);
         } catch (_) { /* non-critical */ }
 
-        res.status(201).json({ 
-          ok: true, 
-          booking, 
+        res.status(201).json({
+          ok: true,
+          booking,
           payment: {
             id: payment.id,
             amount: payment.amount,
@@ -851,7 +888,7 @@ async function start() {
 
     try {
       const pool = getPool();
-      
+
       // Verify booking belongs to user
       const bookingCheck = await pool.query(
         `SELECT customer_id FROM bookings WHERE id = $1`,
@@ -910,7 +947,7 @@ async function start() {
 
     try {
       const pool = getPool();
-      
+
       // Verify booking belongs to user
       const bookingCheck = await pool.query(
         `SELECT customer_id, status FROM bookings WHERE id = $1`,
@@ -978,7 +1015,7 @@ async function start() {
 
     try {
       const pool = getPool();
-      
+
       // Get complete booking details with payment, service, vendor, and customer info
       const result = await pool.query(
         `SELECT 
@@ -1106,7 +1143,7 @@ async function start() {
 
     try {
       const { createReview } = await import("./db/reviews");
-      
+
       const review = await createReview({
         bookingId: Number(bookingId),
         customerId: user.id,
@@ -1198,6 +1235,38 @@ async function start() {
     }
   });
 
+  // ---- Admin Users API ----
+  // List all users (admin only)
+  app.get("/api/admin/users", async (req, res) => {
+    const user = getAuthUserFromRequest(req);
+    if (!user || user.role !== "admin") {
+      res.status(403).json({ error: "Forbidden: admins only" });
+      return;
+    }
+
+    try {
+      const pool = getPool();
+      const { rows } = await pool.query(
+        `SELECT id, name, email, role, created_at
+         FROM users
+         ORDER BY created_at DESC`
+      );
+      res.status(200).json({
+        ok: true,
+        users: rows.map((r: any) => ({
+          id: r.id,
+          name: r.name || "Anonymous",
+          email: r.email,
+          role: r.role,
+          joined: new Date(r.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+          createdAt: r.created_at,
+        })),
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? "Failed to fetch users" });
+    }
+  });
+
   // ---- Admin Vendor Approval API ----
 
   // List all vendors with their user info and verification status
@@ -1255,7 +1324,7 @@ async function start() {
       // Notify the vendor
       try {
         await createNotification(rows[0].user_id, `Your vendor account "${rows[0].business_name}" has been approved! You can now receive bookings.`);
-      } catch (_) {}
+      } catch (_) { }
 
       res.status(200).json({ ok: true });
     } catch (err: any) {
@@ -1285,7 +1354,7 @@ async function start() {
       // Notify the vendor
       try {
         await createNotification(rows[0].user_id, `Your vendor account "${rows[0].business_name}" application was not approved. Please contact support for details.`);
-      } catch (_) {}
+      } catch (_) { }
 
       res.status(200).json({ ok: true });
     } catch (err: any) {
@@ -1389,7 +1458,7 @@ async function start() {
 
     try {
       const pool = getPool();
-      
+
       // Get vendor ID
       const vendorResult = await pool.query(
         `SELECT id FROM vendors WHERE user_id = $1`,
@@ -1456,7 +1525,7 @@ async function start() {
     try {
       const vendorId = await getVendorIdByUserId(user.id);
       const pool = getPool();
-      
+
       const result = await pool.query(
         `SELECT 
           s.id, 
@@ -1498,7 +1567,7 @@ async function start() {
       const vendorId = await getVendorIdByUserId(user.id);
       console.log("[POST /api/vendor/services] User ID:", user.id, "Vendor ID:", vendorId, "Category ID:", categoryId);
       const pool = getPool();
-      
+
       const result = await pool.query(
         `INSERT INTO services (vendor_id, category_id, title, description, price, duration_minutes, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, true)
@@ -1532,7 +1601,7 @@ async function start() {
     try {
       const vendorId = await getVendorIdByUserId(user.id);
       const pool = getPool();
-      
+
       // Verify service belongs to this vendor
       const checkResult = await pool.query(
         `SELECT vendor_id FROM services WHERE id = $1`,
@@ -1614,7 +1683,7 @@ async function start() {
     try {
       const vendorId = await getVendorIdByUserId(user.id);
       const pool = getPool();
-      
+
       // Verify service belongs to this vendor
       const checkResult = await pool.query(
         `SELECT vendor_id FROM services WHERE id = $1`,
@@ -1638,8 +1707,8 @@ async function start() {
       );
 
       if (bookingsCheck.rows[0].count > 0) {
-        res.status(400).json({ 
-          error: "Cannot delete service with existing bookings. Please mark it as inactive instead." 
+        res.status(400).json({
+          error: "Cannot delete service with existing bookings. Please mark it as inactive instead."
         });
         return;
       }
@@ -1804,6 +1873,407 @@ async function start() {
       res.status(200).json({ ok: true });
     } catch (err: any) {
       res.status(400).json({ error: err?.message ?? "Failed to mark all as read" });
+    }
+  });
+
+  // ---- Locations API ----
+  app.get("/api/locations", async (_req, res) => {
+    try {
+      const pool = (await import("./db/pool")).getPool();
+      const { rows } = await pool.query<{ city: string }>(
+        `SELECT DISTINCT city
+         FROM vendors
+         WHERE city IS NOT NULL AND city != ''
+         ORDER BY city ASC`
+      );
+      const locations = rows.map((r) => r.city);
+      res.status(200).json({ ok: true, locations });
+    } catch (err: any) {
+      console.error("[GET /api/locations] Error:", err);
+      res.status(500).json({ error: "Failed to fetch locations" });
+    }
+  });
+
+  // ---- Chatbot API ----
+
+  type RoleCtx = "customer" | "vendor" | "admin" | "public";
+
+  type IntentEntry = {
+    intent: string;
+    keywords: string[];
+    roles: RoleCtx[];
+  };
+
+  const intents: IntentEntry[] = [
+    { intent: "greeting", keywords: ["hello", "hi", "hey", "good morning", "good evening"], roles: ["customer", "vendor", "admin", "public"] },
+    { intent: "help", keywords: ["help", "what can you do", "how to use", "guide"], roles: ["customer", "vendor", "admin", "public"] },
+    { intent: "thanks", keywords: ["thank", "thanks", "appreciate"], roles: ["customer", "vendor", "admin", "public"] },
+    { intent: "booking_info", keywords: ["my booking", "booking status", "how many booking", "booking count", "bookings"], roles: ["customer", "vendor"] },
+    { intent: "book_service", keywords: ["book a", "make appointment", "schedule", "book service"], roles: ["customer", "public"] },
+    { intent: "cancel_reschedule", keywords: ["cancel", "reschedule", "change date", "change time"], roles: ["customer"] },
+    { intent: "find_service", keywords: ["find", "search", "looking for", "discover", "browse"], roles: ["customer", "vendor", "admin", "public"] },
+    { intent: "pricing", keywords: ["price", "cost", "how much", "pricing", "fee"], roles: ["customer", "public"] },
+    { intent: "review", keywords: ["review", "rate", "feedback", "rating"], roles: ["customer", "vendor", "admin"] },
+    { intent: "earnings", keywords: ["earning", "revenue", "income", "money", "payout", "payment"], roles: ["vendor"] },
+    { intent: "service_mgmt", keywords: ["add service", "create listing", "new service", "my service", "edit service"], roles: ["vendor"] },
+    { intent: "profile", keywords: ["profile", "verify", "verification", "account", "settings"], roles: ["customer", "vendor"] },
+    { intent: "vendor_mgmt", keywords: ["approve vendor", "vendor application", "pending vendor", "manage vendor"], roles: ["admin"] },
+    { intent: "platform_stats", keywords: ["stats", "analytics", "report", "users", "dashboard", "overview"], roles: ["admin"] },
+    { intent: "categories", keywords: ["category", "categories"], roles: ["admin"] },
+    { intent: "moderation", keywords: ["moderate", "flag", "reported", "spam"], roles: ["admin"] },
+    { intent: "notifications", keywords: ["notification", "alert", "unread"], roles: ["customer", "vendor", "admin"] },
+    { intent: "signup", keywords: ["sign up", "register", "create account", "join", "sign in", "login", "log in"], roles: ["public"] },
+    { intent: "become_vendor", keywords: ["become vendor", "offer service", "sell service", "provider", "start business"], roles: ["public"] },
+  ];
+
+  function detectIntent(message: string, role: RoleCtx): string {
+    const lower = message.toLowerCase();
+    for (const entry of intents) {
+      if (!entry.roles.includes(role)) continue;
+      if (entry.keywords.some((kw) => lower.includes(kw))) return entry.intent;
+    }
+    return "fallback";
+  }
+
+  // Extract a search keyword from the message (the first noun phrase after intent keywords)
+  function extractSearchKeyword(message: string): string {
+    const lower = message.toLowerCase();
+    const prefixes = ["find ", "search ", "looking for ", "search for ", "find me ", "i need ", "i want "];
+    for (const p of prefixes) {
+      const idx = lower.indexOf(p);
+      if (idx !== -1) {
+        const rest = message.slice(idx + p.length).trim().replace(/[?.!]+$/, "");
+        if (rest.length > 0 && rest.length < 80) return rest;
+      }
+    }
+    // Fallback: use the whole message without common words
+    const cleaned = lower.replace(/\b(a|an|the|is|are|i|me|my|for|to|in|on|any|some|please|can|you|do|have)\b/g, "").trim();
+    return cleaned.length > 0 && cleaned.length < 80 ? cleaned : "";
+  }
+
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { message } = req.body ?? {};
+      if (typeof message !== "string" || !message.trim()) {
+        res.status(400).json({ error: "Message is required" });
+        return;
+      }
+
+      const user = getAuthUserFromRequest(req);
+      const role: RoleCtx = user?.role ?? "public";
+      const intent = detectIntent(message, role);
+
+      let reply = "";
+      let suggestions: string[] = [];
+
+      switch (intent) {
+        // --- Shared intents ---
+        case "greeting":
+          if (role === "customer") {
+            reply = `Hello${user?.name ? `, ${user.name}` : ""}! 😊 How can I help you today? You can ask about your bookings, find services, or get help navigating the platform.`;
+            suggestions = ["My bookings", "Find a service", "Help"];
+          } else if (role === "vendor") {
+            reply = `Hello${user?.name ? `, ${user.name}` : ""}! 👋 I'm here to help with your vendor dashboard. Ask me about earnings, bookings, or service management.`;
+            suggestions = ["My earnings", "My bookings", "Add service"];
+          } else if (role === "admin") {
+            reply = `Hello, Admin! 🛡️ I can help you with platform analytics, vendor management, and content moderation.`;
+            suggestions = ["Platform stats", "Pending reviews", "Manage vendors"];
+          } else {
+            reply = `Hello! 😊 Welcome to ServiceBook! I can help you find services, learn about our platform, or get started. What would you like to know?`;
+            suggestions = ["Browse services", "How to book", "Sign up"];
+          }
+          break;
+
+        case "help":
+          if (role === "customer") {
+            reply = `Here's what I can help you with:\n\n📋 Bookings - View your bookings, check statuses\n🔍 Services - Find and search for services\n⭐ Reviews - Leave feedback after completed bookings\n👤 Profile - Manage your account settings\n🔔 Notifications - Check your alerts\n\nJust ask about any of these!`;
+            suggestions = ["My bookings", "Find a service", "My profile"];
+          } else if (role === "vendor") {
+            reply = `Here's what I can help you with:\n\n💰 Earnings - Revenue, payouts, transaction history\n📋 Bookings - View and manage booking requests\n🛠️ Services - Create, edit, manage listings\n⭐ Reviews - See customer feedback\n👤 Profile - Update your business details\n\nJust ask about any of these!`;
+            suggestions = ["My earnings", "My bookings", "My services"];
+          } else if (role === "admin") {
+            reply = `Here's what I can help you with:\n\n📊 Analytics - Platform stats, user growth, revenue\n🏪 Vendors - Approve/manage vendor applications\n📂 Categories - Manage service categories\n⭐ Reviews - Moderate user reviews\n👥 Users - User management\n\nJust ask about any of these!`;
+            suggestions = ["Platform stats", "Manage vendors", "Moderate reviews"];
+          } else {
+            reply = `I can help you with:\n\n🔍 Find Services - Browse and discover service providers\n📝 How to Book - Learn the booking process\n🤝 Become a Vendor - Start offering your services\n📋 Sign Up - Create your account\n\nWhat are you interested in?`;
+            suggestions = ["Find services", "How to book", "Sign up"];
+          }
+          break;
+
+        case "thanks":
+          reply = "You're welcome! 😊 Let me know if there's anything else I can help with.";
+          suggestions = ["Help"];
+          break;
+
+        // --- Customer intents ---
+        case "booking_info":
+          if (role === "customer" && user) {
+            try {
+              const summary = await chatGetCustomerBookingSummary(user.id);
+              const recent = await chatGetCustomerRecentBookings(user.id, 3);
+              reply = `Your Booking Summary:\nTotal: ${summary.total} bookings\nPending: ${summary.pending}\nAccepted: ${summary.accepted}\nCompleted: ${summary.completed}\nCancelled: ${summary.cancelled}`;
+              if (recent.length > 0) {
+                reply += `\n\nRecent Bookings:`;
+                recent.forEach((b) => {
+                  reply += `\n#${b.id} - ${b.serviceTitle} (${b.status})`;
+                });
+              }
+              suggestions = ["Find a service", "Help"];
+            } catch {
+              reply = "Couldn't fetch your booking data right now. View your bookings on the My Bookings page.";
+              suggestions = ["Help"];
+            }
+          } else if (role === "vendor" && user) {
+            try {
+              const summary = await chatGetVendorBookingSummary(user.id);
+              const recent = await chatGetVendorRecentBookings(user.id, 3);
+              reply = `Your Booking Summary:\nTotal: ${summary.total} bookings\nPending: ${summary.pending} (need your action)\nAccepted: ${summary.accepted}\nCompleted: ${summary.completed}`;
+              if (recent.length > 0) {
+                reply += `\n\nRecent Bookings:`;
+                recent.forEach((b) => {
+                  reply += `\n#${b.id} - ${b.serviceTitle} from ${b.customerName} (${b.status})`;
+                });
+              }
+              suggestions = ["My earnings", "My services", "Help"];
+            } catch {
+              reply = "Couldn't fetch your booking data right now. View your bookings on the Bookings page.";
+              suggestions = ["Help"];
+            }
+          } else {
+            reply = "Please sign in to view your bookings.";
+            suggestions = ["Sign up", "Help"];
+          }
+          break;
+
+        case "book_service":
+          if (role === "customer") {
+            reply = `To book a service:\n\n1️⃣ Browse or search for a service\n2️⃣ Select your preferred date & time slot\n3️⃣ Confirm the booking on the checkout page\n\nWould you like to search for a specific service?`;
+            suggestions = ["Find a service", "My bookings"];
+          } else {
+            reply = `To book a service, you'll need to sign in as a customer first. Once logged in, browse services and follow the booking flow!`;
+            suggestions = ["Sign up", "Browse services"];
+          }
+          break;
+
+        case "cancel_reschedule":
+          reply = `You can manage your bookings from the My Bookings page:\n\nCancel - Click the cancel button on any pending/accepted booking\nReschedule - Select a new time slot for your booking\n\nNote: Some cancellation policies may apply depending on the service provider.`;
+          suggestions = ["My bookings", "Help"];
+          break;
+
+        case "find_service": {
+          const keyword = extractSearchKeyword(message);
+          if (keyword.length > 1) {
+            try {
+              const results = await chatSearchServices(keyword, 5);
+              if (results.length > 0) {
+                reply = `Services matching "${keyword}":\n`;
+                results.forEach((s) => {
+                  reply += `\n${s.title} - ₹${s.price} by ${s.vendorName}${s.rating > 0 ? ` (⭐ ${s.rating})` : ""}`;
+                });
+                reply += `\n\nVisit the Services page for full details and booking!`;
+              } else {
+                reply = `Couldn't find services matching "${keyword}". Try a different search or browse all services on the Services page.`;
+              }
+              suggestions = ["Browse all services", "Help"];
+            } catch {
+              reply = "Couldn't search services right now. Browse all services on the Services page!";
+              suggestions = ["Help"];
+            }
+          } else {
+            reply = `Browse all services on the Services page! Use the search bar and category filters to narrow down what you're looking for.\n\nOr tell me what you're looking for, e.g., "Find plumbing services".`;
+            suggestions = ["Browse services", "Help"];
+          }
+          break;
+        }
+
+        case "pricing":
+          reply = `Service prices vary by provider. You can view each service's pricing on its detail page.\n\nPrices are displayed upfront before you confirm a booking, so there are no hidden costs!`;
+          suggestions = ["Find a service", "Help"];
+          break;
+
+        case "review":
+          if (role === "customer") {
+            reply = `After a completed service, you'll see a Leave Review option on your bookings page. Your feedback helps other customers and the vendor!\n\nRate from 1-5 stars and leave a comment.`;
+            suggestions = ["My bookings", "Help"];
+          } else if (role === "vendor") {
+            reply = `View all customer reviews on your Reviews page. Reviews are visible to customers after admin approval.`;
+            suggestions = ["My bookings", "My earnings"];
+          } else if (role === "admin") {
+            try {
+              const stats = await chatGetAdminStats();
+              reply = `Review Moderation:\n\nPending reviews: ${stats.pendingReviews}\n\nHead to the Reviews page to approve, edit, or remove reviews that violate platform guidelines.`;
+              suggestions = ["Platform stats", "Manage vendors"];
+            } catch {
+              reply = "Check the Reviews page for flagged or reported reviews. You can approve, edit, or remove reviews.";
+              suggestions = ["Platform stats", "Help"];
+            }
+          } else {
+            reply = "Sign in to leave reviews after booking a service!";
+            suggestions = ["Sign up", "Help"];
+          }
+          break;
+
+        // --- Vendor intents ---
+        case "earnings":
+          if (role === "vendor" && user) {
+            try {
+              const earnings = await chatGetVendorEarnings(user.id);
+              reply = `Your Earnings Summary:\n\nTotal Earnings: ₹${earnings.totalEarnings}\nThis Month: ₹${earnings.thisMonthEarnings}\nPending Payout: ₹${earnings.pendingPayout}\n\nVisit the Earnings page for a full breakdown and transaction history!`;
+              suggestions = ["My bookings", "My services"];
+            } catch {
+              reply = "Couldn't fetch your earnings right now. Check the Earnings page for a full breakdown.";
+              suggestions = ["Help"];
+            }
+          } else {
+            reply = "Earnings information is available to vendors. Sign in as a vendor to view your earnings.";
+            suggestions = ["Help"];
+          }
+          break;
+
+        case "service_mgmt":
+          if (role === "vendor" && user) {
+            try {
+              const svcCount = await chatGetVendorServiceCount(user.id);
+              reply = `Your Services:\n\nActive: ${svcCount.active} services\nTotal: ${svcCount.total} services\n\nTo create a new service:\n1. Go to My Services\n2. Click Add Service\n3. Fill in details, pricing, and availability\n\nTip: Detailed descriptions and competitive pricing get more bookings!`;
+              suggestions = ["My bookings", "My earnings"];
+            } catch {
+              reply = "To manage your services, visit the My Services page. You can add, edit, or deactivate listings there.";
+              suggestions = ["Help"];
+            }
+          } else {
+            reply = "Service management is available to vendors. Sign up as a vendor to create and manage service listings!";
+            suggestions = ["Become a vendor", "Help"];
+          }
+          break;
+
+        case "profile":
+          if (role === "vendor") {
+            reply = `Complete your vendor profile to increase visibility:\n\nBusiness name & description\nService area\nUpload license/certification for verification\nAdd a shop image\n\nVisit the Profile page to update your details.`;
+            suggestions = ["My earnings", "My services"];
+          } else if (role === "customer") {
+            reply = `Update your profile from the Profile page:\n\nName & contact info\nPhone number\n\nKeep your info up to date so vendors can reach you about bookings!`;
+            suggestions = ["My bookings", "Help"];
+          } else {
+            reply = "Sign in to manage your profile settings.";
+            suggestions = ["Sign up", "Help"];
+          }
+          break;
+
+        // --- Admin intents ---
+        case "vendor_mgmt":
+          reply = `Head to the Vendors page to review pending applications. You can:\n\nApprove vendors\nReject applications\nView vendor details and documents\n\nVerified vendors get a badge on their profile.`;
+          suggestions = ["Platform stats", "Moderate reviews"];
+          break;
+
+        case "platform_stats":
+          if (role === "admin") {
+            try {
+              const stats = await chatGetAdminStats();
+              reply = `Platform Overview:\n\nTotal Customers: ${stats.totalUsers}\nTotal Vendors: ${stats.totalVendors}\nTotal Bookings: ${stats.totalBookings}\nTotal Revenue: ₹${stats.totalRevenue}\nPending Reviews: ${stats.pendingReviews}\n\nVisit the Dashboard for detailed charts and trends!`;
+              suggestions = ["Manage vendors", "Moderate reviews"];
+            } catch {
+              reply = "Couldn't fetch platform stats right now. Check the Dashboard for detailed analytics.";
+              suggestions = ["Help"];
+            }
+          } else {
+            reply = "Platform analytics are available to administrators.";
+            suggestions = ["Help"];
+          }
+          break;
+
+        case "categories":
+          reply = `Manage service categories from the Categories page:\n\nAdd new categories\nEdit existing category names\nOrganize the service catalog\n\nCategories help customers find services quickly!`;
+          suggestions = ["Platform stats", "Manage vendors"];
+          break;
+
+        case "moderation":
+          reply = `Check the Reviews page for flagged or reported content. You can:\n\nApprove legitimate reviews\nEdit inappropriate content\nRemove policy-violating reviews\n\nTimely moderation keeps the platform trustworthy!`;
+          suggestions = ["Platform stats", "Manage vendors"];
+          break;
+
+        // --- Public intents ---
+        case "signup":
+          reply = `Getting started is easy!\n\n1. Click Sign In at the top of the page\n2. Choose to sign up as a Customer or Vendor\n3. Fill in your details or use Google Sign-In\n\nCustomer - Book services from top providers\nVendor - List your services and grow your business`;
+          suggestions = ["Browse services", "Become a vendor"];
+          break;
+
+        case "become_vendor":
+          reply = `Want to offer your services?\n\n1. Sign up as a Vendor\n2. Complete your business profile\n3. Add your service listings with pricing\n4. Set your availability\n5. Start receiving bookings!\n\nVendors can manage everything from their dashboard.`;
+          suggestions = ["Sign up", "Browse services"];
+          break;
+
+        case "notifications":
+          reply = `Check your Notifications page for alerts about:\n\nBooking updates\nNew reviews\nImportant platform announcements\n\nUnread notifications are shown with a badge in the sidebar.`;
+          suggestions = ["My bookings", "Help"];
+          break;
+
+        // --- Fallback ---
+        default: {
+          // Use Groq with RAG for unrecognized intents
+          try {
+            const { context, sources } = await retrieveRAGContext(
+              message,
+              user?.id,
+              role
+            );
+
+            const systemPrompt = `You are a direct, concise customer service chatbot for ServiceBook.
+Role: ${role} ${user?.name ? `(${user.name})` : ""}
+
+IMPORTANT RULES:
+- Give SHORT, direct answers (1-3 sentences max)
+- NO long explanations or lists unless specifically asked
+- Use bullet points ONLY when necessary
+- Be helpful but brief
+- Reference specific data from context when available
+- If you don't know, say so directly
+
+Context data:
+${context}`;
+
+            const completion = await groq.chat.completions.create({
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: message },
+              ],
+              model: "llama-3.1-8b-instant",
+              temperature: 0.7,
+              max_tokens: 150,
+            });
+
+            reply =
+              completion.choices[0]?.message?.content ||
+              "I couldn't process that request. Please try again.";
+
+            // Add context-aware suggestions
+            if (sources.servicesCount > 0) {
+              suggestions.push("Browse services");
+            }
+            if (role === "customer") {
+              suggestions.push("My bookings");
+            } else if (role === "vendor") {
+              suggestions.push("My services");
+            }
+            suggestions.push("Help");
+          } catch (groqError) {
+            console.error("Groq RAG error:", groqError);
+            // Fallback to static response if Groq fails
+            const fallbacks = [
+              `I'm not sure I understand. Could you rephrase that? You can ask me about ${role === "vendor" ? "earnings, bookings, or services" : role === "admin" ? "platform stats, vendors, or moderation" : "services, bookings, or how the platform works"}.`,
+              `Hmm, I don't have an answer for that yet. Try asking about ${role === "vendor" ? "your earnings or managing services" : role === "admin" ? "analytics or vendor management" : "finding services or managing bookings"}!`,
+              `I'm still learning! Try asking me about ${role === "vendor" ? "service management, bookings, or revenue" : role === "admin" ? "platform overview or content moderation" : "discovering services, bookings, or your account"}.`,
+            ];
+            reply = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+            suggestions = ["Help"];
+          }
+          break;
+        }
+      }
+
+      res.status(200).json({ reply, suggestions });
+    } catch (err: any) {
+      console.error("[POST /api/chat] Error:", err);
+      res.status(500).json({ error: "Something went wrong. Please try again." });
     }
   });
 

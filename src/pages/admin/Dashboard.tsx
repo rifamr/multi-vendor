@@ -69,7 +69,8 @@ export default function AdminDashboard() {
     fetchData();
   }, []);
 
-  const formatTrend = (value: number) => {
+  const formatTrend = (value: number): string | null => {
+    if (value === 0) return null;
     const sign = value >= 0 ? "+" : "";
     return `${sign}${value.toFixed(1)}%`;
   };

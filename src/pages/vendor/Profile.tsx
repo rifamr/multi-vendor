@@ -7,16 +7,21 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@apollo/client";
 import { GET_CATEGORIES } from "@/graphql/serviceQueries";
 import { useSearchParams } from "react-router-dom";
+import { getAllStates, getDistrictsByState, getCitiesByDistrict } from "@/data/locationData";
 
 type VendorProfile = {
   businessName: string | null;
-  serviceArea: string | null;
+  state: string | null;
+  district: string | null;
+  city: string | null;
+  address: string | null;
   experienceYears: number | null;
   isVerified: boolean | null;
   serviceCategoryId: number | null;
   licenseDocumentUrl: string | null;
   phoneNumber: string | null;
   description: string | null;
+  shopImageUrl: string | null;
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -45,7 +50,10 @@ export default function VendorProfile() {
 
   const [ownerName, setOwnerName] = useState("");
   const [businessName, setBusinessName] = useState("");
-  const [serviceArea, setServiceArea] = useState("");
+  const [state, setState] = useState("");
+  const [district, setDistrict] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [experienceYears, setExperienceYears] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [serviceCategoryId, setServiceCategoryId] = useState("");
@@ -80,7 +88,10 @@ export default function VendorProfile() {
         const v = res.profile.vendor;
         if (!mounted) return;
         setBusinessName(v?.businessName ?? "");
-        setServiceArea(v?.serviceArea ?? "");
+        setState(v?.state ?? "");
+        setDistrict(v?.district ?? "");
+        setCity(v?.city ?? "");
+        setAddress(v?.address ?? "");
         setExperienceYears(v?.experienceYears != null ? String(v.experienceYears) : "");
         setPhoneNumber(v?.phoneNumber ?? "");
         setServiceCategoryId(v?.serviceCategoryId != null ? String(v.serviceCategoryId) : "");
@@ -108,7 +119,10 @@ export default function VendorProfile() {
         body: JSON.stringify({
           name: ownerName,
           businessName,
-          serviceArea,
+          state,
+          district,
+          city,
+          address,
           experienceYears: experienceYears.trim() ? Number(experienceYears) : null,
           phoneNumber,
           serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : null,
@@ -252,15 +266,74 @@ export default function VendorProfile() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Service Area</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">State *</label>
+              <select
+                value={state}
+                onChange={(e) => {
+                  setState(e.target.value);
+                  setDistrict("");
+                  setCity("");
+                }}
+                className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              >
+                <option value="">Select a state</option>
+                {getAllStates().map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {state && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">District *</label>
+                <select
+                  value={district}
+                  onChange={(e) => {
+                    setDistrict(e.target.value);
+                    setCity("");
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                >
+                  <option value="">Select a district</option>
+                  {getDistrictsByState(state).map((dist) => (
+                    <option key={dist} value={dist}>
+                      {dist}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {district && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">City *</label>
+                <select
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                >
+                  <option value="">Select a city</option>
+                  {getCitiesByDistrict(state, district).map((cty) => (
+                    <option key={cty} value={cty}>
+                      {cty}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Address *</label>
               <div className="relative">
                 <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  value={serviceArea}
-                  onChange={(e) => setServiceArea(e.target.value)}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="City, State"
+                  placeholder="123 Main Street, Building Name"
                 />
               </div>
             </div>

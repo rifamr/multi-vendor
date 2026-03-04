@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/auth/AuthContext";
 import { useQuery } from "@apollo/client";
 import { GET_CATEGORIES } from "@/graphql/serviceQueries";
+import { getAllStates, getDistrictsByState, getCitiesByDistrict } from "@/data/locationData";
 import {
   getSelectedRole,
   roleToDashboardPath,
@@ -40,7 +41,10 @@ export default function Login() {
   // Vendor-specific fields
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [serviceArea, setServiceArea] = useState("");
+  const [state, setState] = useState("");
+  const [district, setDistrict] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [serviceCategoryId, setServiceCategoryId] = useState("");
   const [experienceYears, setExperienceYears] = useState("");
   const [description, setDescription] = useState("");
@@ -104,7 +108,7 @@ export default function Login() {
         toast({ title: "Passwords don't match", description: "Please confirm your password.", variant: "destructive" });
         return;
       }
-      
+
       // If customer, submit now; if vendor, go to step 3
       if (role === "customer") {
         handleSubmit();
@@ -168,6 +172,14 @@ export default function Login() {
             toast({ title: "Service type required", description: "Select your service category.", variant: "destructive" });
             return;
           }
+          if (!state || !district || !city) {
+            toast({ title: "Location required", description: "Select state, district, and city.", variant: "destructive" });
+            return;
+          }
+          if (!address.trim()) {
+            toast({ title: "Address required", description: "Enter your business address.", variant: "destructive" });
+            return;
+          }
         }
 
         const requestBody: any = {
@@ -182,7 +194,10 @@ export default function Login() {
           requestBody.vendorProfile = {
             businessName: businessName.trim(),
             phoneNumber: phoneNumber.trim(),
-            serviceArea: serviceArea.trim() || undefined,
+            state: state.trim(),
+            district: district.trim(),
+            city: city.trim(),
+            address: address.trim(),
             serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : undefined,
             experienceYears: experienceYears ? Number(experienceYears) : undefined,
             description: description.trim() || undefined,
@@ -268,20 +283,19 @@ export default function Login() {
             </div>
             <h1 className="font-display text-2xl font-bold text-foreground">{getStepTitle()}</h1>
             <p className="text-sm text-muted-foreground mt-1">{getStepSubtitle()}</p>
-            
+
             {/* Progress indicator for signup */}
             {mode === "signup" && (
               <div className="flex items-center justify-center gap-2 mt-4">
                 {Array.from({ length: totalSteps }).map((_, idx) => (
                   <div
                     key={idx}
-                    className={`h-1.5 rounded-full transition-all ${
-                      idx + 1 === signupStep
+                    className={`h-1.5 rounded-full transition-all ${idx + 1 === signupStep
                         ? "w-8 bg-primary"
                         : idx + 1 < signupStep
-                        ? "w-6 bg-primary/60"
-                        : "w-4 bg-border"
-                    }`}
+                          ? "w-6 bg-primary/60"
+                          : "w-4 bg-border"
+                      }`}
                   />
                 ))}
               </div>
@@ -297,11 +311,10 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => pickRole("customer")}
-                    className={`flex flex-col items-center justify-center gap-3 py-6 rounded-xl border text-sm font-medium transition-all ${
-                      role === "customer"
+                    className={`flex flex-col items-center justify-center gap-3 py-6 rounded-xl border text-sm font-medium transition-all ${role === "customer"
                         ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20"
                         : "border-border text-foreground hover:bg-secondary/50"
-                    }`}
+                      }`}
                   >
                     <User size={28} />
                     <div>
@@ -312,11 +325,10 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => pickRole("vendor")}
-                    className={`flex flex-col items-center justify-center gap-3 py-6 rounded-xl border text-sm font-medium transition-all ${
-                      role === "vendor"
+                    className={`flex flex-col items-center justify-center gap-3 py-6 rounded-xl border text-sm font-medium transition-all ${role === "vendor"
                         ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20"
                         : "border-border text-foreground hover:bg-secondary/50"
-                    }`}
+                      }`}
                   >
                     <Store size={28} />
                     <div>
@@ -348,7 +360,7 @@ export default function Login() {
                   onClick={() => handleSocial("facebook")}
                   className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
                   Facebook
                 </button>
               </div>
@@ -365,22 +377,20 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => pickRole("customer")}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                        role === "customer"
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-colors ${role === "customer"
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border text-foreground hover:bg-secondary/50"
-                      }`}
+                        }`}
                     >
                       <User size={16} /> Customer
                     </button>
                     <button
                       type="button"
                       onClick={() => pickRole("vendor")}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                        role === "vendor"
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-colors ${role === "vendor"
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border text-foreground hover:bg-secondary/50"
-                      }`}
+                        }`}
                     >
                       <Store size={16} /> Vendor
                     </button>
@@ -498,14 +508,73 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-foreground mb-1.5 block">Service Area</label>
+                <label className="text-xs font-medium text-foreground mb-1.5 block">State *</label>
+                <select
+                  value={state}
+                  onChange={(e) => {
+                    setState(e.target.value);
+                    setDistrict("");
+                    setCity("");
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select a state</option>
+                  {getAllStates().map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {state && (
+                <div>
+                  <label className="text-xs font-medium text-foreground mb-1.5 block">District *</label>
+                  <select
+                    value={district}
+                    onChange={(e) => {
+                      setDistrict(e.target.value);
+                      setCity("");
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select a district</option>
+                    {getDistrictsByState(state).map((dist) => (
+                      <option key={dist} value={dist}>
+                        {dist}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {district && (
+                <div>
+                  <label className="text-xs font-medium text-foreground mb-1.5 block">City *</label>
+                  <select
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select a city</option>
+                    {getCitiesByDistrict(state, district).map((cty) => (
+                      <option key={cty} value={cty}>
+                        {cty}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1.5 block">Address *</label>
                 <div className="relative">
                   <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
-                    placeholder="e.g., Downtown, Bay Area"
-                    value={serviceArea}
-                    onChange={(e) => setServiceArea(e.target.value)}
+                    placeholder="e.g., 123 Main Street, Building Name"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -563,7 +632,7 @@ export default function Login() {
                 Back
               </button>
             )}
-            
+
             {mode === "signin" || (mode === "signup" && signupStep === 2 && role === "customer") || (mode === "signup" && signupStep === 3) ? (
               <button
                 type="button"
@@ -607,7 +676,7 @@ export default function Login() {
                   onClick={() => handleSocial("facebook")}
                   className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-secondary/50 transition-colors"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
                   Facebook
                 </button>
               </div>

@@ -98,7 +98,8 @@ export default function VendorDashboard() {
     fetchData();
   }, []);
 
-  const formatTrend = (value: number) => {
+  const formatTrend = (value: number): string | null => {
+    if (value === 0) return null; // No meaningful trend to show
     const sign = value >= 0 ? "+" : "";
     return `${sign}${value.toFixed(1)}%`;
   };

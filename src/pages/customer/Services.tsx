@@ -1,11 +1,12 @@
 import { useQuery } from "@apollo/client";
-import { motion } from "framer-motion";
-import { Search, Star, ChevronDown } from "lucide-react";
-import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, Star, MapPin } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { GET_CATEGORIES, GET_SERVICES } from "@/graphql/serviceQueries";
+import { getAllStates, getDistrictsByState, getCitiesByDistrict } from "@/data/locationData";
 import {
   Select,
   SelectContent,
@@ -122,11 +123,32 @@ function priceRangeToMinMax(id: PriceRangeId): { minPrice?: number; maxPrice?: n
   }
 }
 
+const LOCATION_KEY = "servicebook_location";
+
 export default function CustomerServices() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRangeId | null>(null);
   const [minRating, setMinRating] = useState<number | null>(null);
+
+  // Location state - hierarchical
+  const LOCATION_KEY = "selected_location_city";
+  const STATE_KEY = "selected_location_state";
+  const DISTRICT_KEY = "selected_location_district";
+
+  const [selectedState, setSelectedState] = useState<string>(() => {
+    return localStorage.getItem(STATE_KEY) || "";
+  });
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(() => {
+    return localStorage.getItem(DISTRICT_KEY) || "";
+  });
+  const [selectedCity, setSelectedCity] = useState<string>(() => {
+    return localStorage.getItem(LOCATION_KEY) || "";
+  });
+  const [showLocationPicker, setShowLocationPicker] = useState(!localStorage.getItem(LOCATION_KEY));
+
+  // Set selectedLocation for GraphQL query (city name)
+  const selectedLocation = selectedCity;
 
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
 
@@ -140,9 +162,11 @@ export default function CustomerServices() {
         minPrice: typeof priceMinMax.minPrice === "number" ? priceMinMax.minPrice : null,
         maxPrice: typeof priceMinMax.maxPrice === "number" ? priceMinMax.maxPrice : null,
         minRating,
+        location: selectedLocation,
       },
       sort: searchQuery.trim().length ? "RELEVANCE" : "RATING_DESC",
     },
+    skip: !selectedLocation,
   });
 
   const categories = (categoriesData?.categories ?? []) as Array<{ id: string; name: string }>;
@@ -173,7 +197,6 @@ export default function CustomerServices() {
       vendorId,
       vendorName: vendorServices[0].vendor.displayName,
       services: vendorServices,
-      // Use first service for display defaults
       avgRating: vendorServices.reduce((sum, s) => sum + s.rating, 0) / vendorServices.length,
       totalReviews: vendorServices.reduce((sum, s) => sum + s.reviews, 0),
       category: vendorServices[0].category.name,
@@ -183,10 +206,146 @@ export default function CustomerServices() {
 
   return (
     <DashboardLayout role="customer">
+      {/* ---- Location Picker Modal ---- */}
+      <AnimatePresence>
+        {showLocationPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-background border border-border p-6 shadow-2xl"
+            >
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <MapPin size={28} className="text-primary" />
+                </div>
+                <h2 className="font-display text-xl font-bold text-foreground">Choose Your Location</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select state, district, and city
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* State Selection */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">State</label>
+                  <select
+                    value={selectedState}
+                    onChange={(e) => {
+                      setSelectedState(e.target.value);
+                      setSelectedDistrict("");
+                      setSelectedCity("");
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                  >
+                    <option value="">Select a state</option>
+                    {getAllStates().map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* District Selection */}
+                {selectedState && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">District</label>
+                    <select
+                      value={selectedDistrict}
+                      onChange={(e) => {
+                        setSelectedDistrict(e.target.value);
+                        setSelectedCity("");
+                      }}
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="">Select a district</option>
+                      {getDistrictsByState(selectedState).map((dist) => (
+                        <option key={dist} value={dist}>
+                          {dist}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* City Selection */}
+                {selectedDistrict && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">City</label>
+                    <select
+                      value={selectedCity}
+                      onChange={(e) => setSelectedCity(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                    >
+                      <option value="">Select a city</option>
+                      {getCitiesByDistrict(selectedState, selectedDistrict).map((cty) => (
+                        <option key={cty} value={cty}>
+                          {cty}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {selectedCity && (
+                <button
+                  onClick={() => {
+                    localStorage.setItem(STATE_KEY, selectedState);
+                    localStorage.setItem(DISTRICT_KEY, selectedDistrict);
+                    localStorage.setItem(LOCATION_KEY, selectedCity);
+                    setShowLocationPicker(false);
+                  }}
+                  className="mt-4 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                >
+                  Confirm Location
+                </button>
+              )}
+
+              {selectedCity && (
+                <button
+                  onClick={() => {
+                    setSelectedState("");
+                    setSelectedDistrict("");
+                    setSelectedCity("");
+                  }}
+                  className="mt-2 w-full py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-secondary/50 transition-colors"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-7xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-1">Browse Services</h1>
-          <p className="text-muted-foreground">Search and book services from verified vendors</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-1">Browse Services</h1>
+              <p className="text-muted-foreground">Search and book services from verified vendors</p>
+            </div>
+
+            {/* Location badge */}
+            {selectedCity && (
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors"
+              >
+                <MapPin size={16} className="text-primary" />
+                <span className="text-sm font-medium text-primary">{selectedCity}, {selectedDistrict}</span>
+                <span className="text-xs text-primary/60">Change</span>
+              </button>
+            )}
+          </div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-6">
@@ -260,52 +419,75 @@ export default function CustomerServices() {
         </motion.div>
 
         <div className="flex-1">
-            {error ? (
-              <div className="text-center py-20">
-                <p className="text-muted-foreground">Failed to load services.</p>
-                <p className="text-xs text-muted-foreground/80 mt-2 max-w-xl mx-auto break-words">
-                  {error.message}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void refetch()}
-                  className="mt-4 px-4 py-2 rounded-xl bg-secondary border border-border text-sm text-foreground hover:bg-secondary/70 transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="card-floating overflow-hidden">
-                    <div className="h-44 bg-muted" />
-                    <div className="p-5 space-y-3">
-                      <div className="h-4 w-3/4 bg-muted rounded" />
-                      <div className="h-3 w-1/2 bg-muted rounded" />
-                      <div className="h-6 w-full bg-muted rounded" />
-                    </div>
+          {!selectedCity ? (
+            <div className="text-center py-20">
+              <MapPin size={48} className="text-primary mx-auto mb-4" />
+              <p className="text-foreground font-medium text-lg">Select a location to browse services</p>
+              <p className="text-muted-foreground text-sm mt-1">Choose your state, district, and city to see available vendors</p>
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="mt-4 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                Choose Location
+              </button>
+            </div>
+          ) : error ? (
+            <div className="text-center py-20">
+              <p className="text-muted-foreground">Failed to load services.</p>
+              <p className="text-xs text-muted-foreground/80 mt-2 max-w-xl mx-auto break-words">
+                {error.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="mt-4 px-4 py-2 rounded-xl bg-secondary border border-border text-sm text-foreground hover:bg-secondary/70 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : loading ? (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="card-floating overflow-hidden">
+                  <div className="h-44 bg-muted" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-4 w-3/4 bg-muted rounded" />
+                    <div className="h-3 w-1/2 bg-muted rounded" />
+                    <div className="h-6 w-full bg-muted rounded" />
                   </div>
-                ))}
+                </div>
+              ))}
+            </div>
+          ) : vendorGroups.length > 0 ? (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {vendorGroups.map((vendor) => (
+                <VendorServiceCard
+                  key={vendor.vendorId}
+                  vendorName={vendor.vendorName}
+                  services={vendor.services}
+                  avgRating={vendor.avgRating}
+                  totalReviews={vendor.totalReviews}
+                  category={vendor.category}
+                  vendorImage={vendor.vendorImage}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
+                <MapPin size={32} className="text-primary" />
               </div>
-            ) : vendorGroups.length > 0 ? (
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                {vendorGroups.map((vendor) => (
-                  <VendorServiceCard
-                    key={vendor.vendorId}
-                    vendorName={vendor.vendorName}
-                    services={vendor.services}
-                    avgRating={vendor.avgRating}
-                    totalReviews={vendor.totalReviews}
-                    category={vendor.category}
-                    vendorImage={vendor.vendorImage}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20">
-                <p className="text-muted-foreground">No services found matching your criteria.</p>
-              </div>
-            )}
+              <p className="text-foreground font-medium text-lg">Coming Soon! 🚀</p>
+              <p className="text-muted-foreground text-sm mt-1">Services in {selectedCity} are on the way</p>
+              <p className="text-muted-foreground text-xs mt-2">Check back soon or browse services in another location</p>
+              <button
+                onClick={() => setShowLocationPicker(true)}
+                className="mt-4 px-6 py-2.5 rounded-xl bg-secondary border border-border text-sm font-medium text-foreground hover:bg-secondary/70 transition-colors"
+              >
+                Select Different Location
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

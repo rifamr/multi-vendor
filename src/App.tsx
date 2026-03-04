@@ -8,6 +8,7 @@ import { ApolloProvider } from "@apollo/client";
 import { apolloClient } from "@/lib/apollo";
 import { AuthProvider } from "@/auth/AuthContext";
 import RequireAuth from "@/components/auth/RequireAuth";
+import Chatbot from "./components/Chatbot.tsx";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -89,6 +90,7 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <Chatbot />
           </BrowserRouter>
         </AuthProvider>
       </TooltipProvider>
