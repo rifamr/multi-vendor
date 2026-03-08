@@ -14,6 +14,7 @@ import { expressMiddleware } from "@as-integrations/express4";
 
 import { typeDefs } from "./schema";
 import { resolvers } from "./resolvers";
+import { getCacheStats, logCacheStats, resetAllCacheStats } from "./db/cache";
 import {
   isAuthRole,
   loginLocalUser,
@@ -2275,6 +2276,19 @@ ${context}`;
       console.error("[POST /api/chat] Error:", err);
       res.status(500).json({ error: "Something went wrong. Please try again." });
     }
+  });
+
+  // ---- Cache Stats (for performance monitoring) ----
+  app.get("/cache-stats", (_req, res) => {
+    res.json(getCacheStats());
+  });
+  app.post("/cache-stats/log", (_req, res) => {
+    logCacheStats();
+    res.json({ logged: true });
+  });
+  app.post("/cache-stats/reset", (_req, res) => {
+    resetAllCacheStats();
+    res.json({ reset: true });
   });
 
   // ---- GraphQL ----
