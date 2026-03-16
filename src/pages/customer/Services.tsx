@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { GET_CATEGORIES, GET_SERVICES } from "@/graphql/serviceQueries";
-import { getAllStates, getDistrictsByState, getCitiesByDistrict } from "@/data/locationData";
+import LocationSelector, { type LocationValue } from "@/components/LocationSelector";
 import {
   Select,
   SelectContent,
@@ -135,20 +135,18 @@ export default function CustomerServices() {
   const LOCATION_KEY = "selected_location_city";
   const STATE_KEY = "selected_location_state";
   const DISTRICT_KEY = "selected_location_district";
+  const COUNTRY_KEY = "selected_location_country";
 
-  const [selectedState, setSelectedState] = useState<string>(() => {
-    return localStorage.getItem(STATE_KEY) || "";
-  });
-  const [selectedDistrict, setSelectedDistrict] = useState<string>(() => {
-    return localStorage.getItem(DISTRICT_KEY) || "";
-  });
-  const [selectedCity, setSelectedCity] = useState<string>(() => {
-    return localStorage.getItem(LOCATION_KEY) || "";
-  });
+  const [selectedLocation, setSelectedLocation] = useState<LocationValue>(() => ({
+    country: localStorage.getItem(COUNTRY_KEY) || "",
+    state: localStorage.getItem(STATE_KEY) || "",
+    district: localStorage.getItem(DISTRICT_KEY) || "",
+    city: localStorage.getItem(LOCATION_KEY) || "",
+  }));
   const [showLocationPicker, setShowLocationPicker] = useState(!localStorage.getItem(LOCATION_KEY));
 
-  // Set selectedLocation for GraphQL query (city name)
-  const selectedLocation = selectedCity;
+  // Set selectedLocationCity for GraphQL query (city name)
+  const selectedLocationCity = selectedLocation.city;
 
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
 
@@ -162,11 +160,11 @@ export default function CustomerServices() {
         minPrice: typeof priceMinMax.minPrice === "number" ? priceMinMax.minPrice : null,
         maxPrice: typeof priceMinMax.maxPrice === "number" ? priceMinMax.maxPrice : null,
         minRating,
-        location: selectedLocation,
+        location: selectedLocationCity,
       },
       sort: searchQuery.trim().length ? "RELEVANCE" : "RATING_DESC",
     },
-    skip: !selectedLocation,
+    skip: !selectedLocationCity,
   });
 
   const categories = (categoriesData?.categories ?? []) as Array<{ id: string; name: string }>;
@@ -227,80 +225,26 @@ export default function CustomerServices() {
                 </div>
                 <h2 className="font-display text-xl font-bold text-foreground">Choose Your Location</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Select state, district, and city
+                  Select country, state, district, and city
                 </p>
               </div>
 
               <div className="space-y-3">
-                {/* State Selection */}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">State</label>
-                  <select
-                    value={selectedState}
-                    onChange={(e) => {
-                      setSelectedState(e.target.value);
-                      setSelectedDistrict("");
-                      setSelectedCity("");
-                    }}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                  >
-                    <option value="">Select a state</option>
-                    {getAllStates().map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* District Selection */}
-                {selectedState && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">District</label>
-                    <select
-                      value={selectedDistrict}
-                      onChange={(e) => {
-                        setSelectedDistrict(e.target.value);
-                        setSelectedCity("");
-                      }}
-                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                    >
-                      <option value="">Select a district</option>
-                      {getDistrictsByState(selectedState).map((dist) => (
-                        <option key={dist} value={dist}>
-                          {dist}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* City Selection */}
-                {selectedDistrict && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">City</label>
-                    <select
-                      value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                    >
-                      <option value="">Select a city</option>
-                      {getCitiesByDistrict(selectedState, selectedDistrict).map((cty) => (
-                        <option key={cty} value={cty}>
-                          {cty}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <LocationSelector
+                  value={selectedLocation}
+                  onChange={setSelectedLocation}
+                  selectClassName="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                  labelClassName="text-xs font-medium text-muted-foreground mb-1.5 block"
+                />
               </div>
 
-              {selectedCity && (
+              {selectedLocation.city && (
                 <button
                   onClick={() => {
-                    localStorage.setItem(STATE_KEY, selectedState);
-                    localStorage.setItem(DISTRICT_KEY, selectedDistrict);
-                    localStorage.setItem(LOCATION_KEY, selectedCity);
+                    localStorage.setItem(COUNTRY_KEY, selectedLocation.country);
+                    localStorage.setItem(STATE_KEY, selectedLocation.state);
+                    localStorage.setItem(DISTRICT_KEY, selectedLocation.district);
+                    localStorage.setItem(LOCATION_KEY, selectedLocation.city);
                     setShowLocationPicker(false);
                   }}
                   className="mt-4 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -309,12 +253,10 @@ export default function CustomerServices() {
                 </button>
               )}
 
-              {selectedCity && (
+              {selectedLocation.city && (
                 <button
                   onClick={() => {
-                    setSelectedState("");
-                    setSelectedDistrict("");
-                    setSelectedCity("");
+                    setSelectedLocation({ country: "", state: "", district: "", city: "" });
                   }}
                   className="mt-2 w-full py-2.5 rounded-xl border border-border text-sm text-foreground hover:bg-secondary/50 transition-colors"
                 >
@@ -335,13 +277,13 @@ export default function CustomerServices() {
             </div>
 
             {/* Location badge */}
-            {selectedCity && (
+            {selectedLocation.city && (
               <button
                 onClick={() => setShowLocationPicker(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors"
               >
                 <MapPin size={16} className="text-primary" />
-                <span className="text-sm font-medium text-primary">{selectedCity}, {selectedDistrict}</span>
+                <span className="text-sm font-medium text-primary">{selectedLocation.city}, {selectedLocation.district}</span>
                 <span className="text-xs text-primary/60">Change</span>
               </button>
             )}
@@ -419,11 +361,11 @@ export default function CustomerServices() {
         </motion.div>
 
         <div className="flex-1">
-          {!selectedCity ? (
+          {!selectedLocation.city ? (
             <div className="text-center py-20">
               <MapPin size={48} className="text-primary mx-auto mb-4" />
               <p className="text-foreground font-medium text-lg">Select a location to browse services</p>
-              <p className="text-muted-foreground text-sm mt-1">Choose your state, district, and city to see available vendors</p>
+              <p className="text-muted-foreground text-sm mt-1">Choose your country, state, district, and city to see available vendors</p>
               <button
                 onClick={() => setShowLocationPicker(true)}
                 className="mt-4 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -478,7 +420,7 @@ export default function CustomerServices() {
                 <MapPin size={32} className="text-primary" />
               </div>
               <p className="text-foreground font-medium text-lg">Coming Soon! 🚀</p>
-              <p className="text-muted-foreground text-sm mt-1">Services in {selectedCity} are on the way</p>
+              <p className="text-muted-foreground text-sm mt-1">Services in {selectedLocation.city} are on the way</p>
               <p className="text-muted-foreground text-xs mt-2">Check back soon or browse services in another location</p>
               <button
                 onClick={() => setShowLocationPicker(true)}

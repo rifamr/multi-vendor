@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/auth/AuthContext";
 import { useQuery } from "@apollo/client";
 import { GET_CATEGORIES } from "@/graphql/serviceQueries";
-import { getAllStates, getDistrictsByState, getCitiesByDistrict } from "@/data/locationData";
+import LocationSelector, { type LocationValue } from "@/components/LocationSelector";
 import {
   getSelectedRole,
   roleToDashboardPath,
@@ -41,9 +41,7 @@ export default function Login() {
   // Vendor-specific fields
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [state, setState] = useState("");
-  const [district, setDistrict] = useState("");
-  const [city, setCity] = useState("");
+  const [location, setLocation] = useState<LocationValue>({ country: "", state: "", district: "", city: "" });
   const [address, setAddress] = useState("");
   const [serviceCategoryId, setServiceCategoryId] = useState("");
   const [experienceYears, setExperienceYears] = useState("");
@@ -172,8 +170,8 @@ export default function Login() {
             toast({ title: "Service type required", description: "Select your service category.", variant: "destructive" });
             return;
           }
-          if (!state || !district || !city) {
-            toast({ title: "Location required", description: "Select state, district, and city.", variant: "destructive" });
+          if (!location.country || !location.state || !location.district || !location.city) {
+            toast({ title: "Location required", description: "Select country, state, district, and city.", variant: "destructive" });
             return;
           }
           if (!address.trim()) {
@@ -194,9 +192,10 @@ export default function Login() {
           requestBody.vendorProfile = {
             businessName: businessName.trim(),
             phoneNumber: phoneNumber.trim(),
-            state: state.trim(),
-            district: district.trim(),
-            city: city.trim(),
+            country: location.country.trim(),
+            state: location.state.trim(),
+            district: location.district.trim(),
+            city: location.city.trim(),
             address: address.trim(),
             serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : undefined,
             experienceYears: experienceYears ? Number(experienceYears) : undefined,
@@ -507,64 +506,12 @@ export default function Login() {
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-foreground mb-1.5 block">State *</label>
-                <select
-                  value={state}
-                  onChange={(e) => {
-                    setState(e.target.value);
-                    setDistrict("");
-                    setCity("");
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Select a state</option>
-                  {getAllStates().map((st) => (
-                    <option key={st} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {state && (
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1.5 block">District *</label>
-                  <select
-                    value={district}
-                    onChange={(e) => {
-                      setDistrict(e.target.value);
-                      setCity("");
-                    }}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Select a district</option>
-                    {getDistrictsByState(state).map((dist) => (
-                      <option key={dist} value={dist}>
-                        {dist}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {district && (
-                <div>
-                  <label className="text-xs font-medium text-foreground mb-1.5 block">City *</label>
-                  <select
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Select a city</option>
-                    {getCitiesByDistrict(state, district).map((cty) => (
-                      <option key={cty} value={cty}>
-                        {cty}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <LocationSelector
+                value={location}
+                onChange={setLocation}
+                selectClassName="w-full px-4 py-2.5 rounded-xl border border-border bg-background/40 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                labelClassName="text-xs font-medium text-foreground mb-1.5 block"
+              />
 
               <div>
                 <label className="text-xs font-medium text-foreground mb-1.5 block">Address *</label>

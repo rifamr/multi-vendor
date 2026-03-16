@@ -1,5 +1,7 @@
-// Indian States, Districts, and Cities
-export const locationData: Record<string, Record<string, string[]>> = {
+// Country → State → District → City hierarchy
+// States, districts, and cities are maintained locally per country.
+export const locationData: Record<string, Record<string, Record<string, string[]>>> = {
+  India: {
   "Tamil Nadu": {
     "Chennai": ["Anna Nagar", "Adyar", "Besant Nagar", "T. Nagar", "Kodambakkam", "Mylapore", "Guindy", "Kilpauk"],
     "Coimbatore": ["Gandhipuram", "Peelamedu", "Saibaba Colony", "Race Course", "Tatabad"],
@@ -85,16 +87,21 @@ export const locationData: Record<string, Record<string, string[]>> = {
     "Indore": ["Indore City"],
     "Bhopal": ["Bhopal City"],
   },
+  }, // end India
 };
 
-export const getAllStates = (): string[] => {
+export const getCountriesWithLocalData = (): string[] => {
   return Object.keys(locationData).sort();
 };
 
-export const getDistrictsByState = (state: string): string[] => {
-  return Object.keys(locationData[state] || {}).sort();
+export const getAllStates = (country: string = "India"): string[] => {
+  return Object.keys(locationData[country] || {}).sort();
 };
 
-export const getCitiesByDistrict = (state: string, district: string): string[] => {
-  return locationData[state]?.[district] || [];
+export const getDistrictsByState = (country: string = "India", state: string): string[] => {
+  return Object.keys(locationData[country]?.[state] || {}).sort();
+};
+
+export const getCitiesByDistrict = (country: string = "India", state: string, district: string): string[] => {
+  return locationData[country]?.[state]?.[district] || [];
 };
