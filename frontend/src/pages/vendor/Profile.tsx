@@ -1,0 +1,413 @@
+import { User, Mail, Phone, MapPin, Camera, Store, Briefcase, FileText, Navigation, Loader2, X } from "lucide-react";
+import DashboardLayout from "@/components/layouts/DashboardLayout";
+import { motion } from "framer-motion";
+import { useAuth } from "@/auth/AuthContext";
+import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@apollo/client";
+import { GET_CATEGORIES } from "@/graphql/serviceQueries";
+import { useSearchParams } from "react-router-dom";
+import LocationSelector, { type LocationValue } from "@/components/LocationSelector";
+import VendorEmergencyPanel from "@/components/emergency/VendorEmergencyPanel";
+
+type VendorProfile = {
+  businessName: string | null;
+  country: string | null;
+  state: string | null;
+  district: string | null;
+  city: string | null;
+  address: string | null;
+  experienceYears: number | null;
+  isVerified: boolean | null;
+  serviceCategoryId: number | null;
+  licenseDocumentUrl: string | null;
+  phoneNumber: string | null;
+  description: string | null;
+  shopImageUrl: string | null;
+};
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    credentials: "include",
+  });
+  const data = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) {
+    const message = typeof data?.error === "string" ? data.error : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return data as T;
+}
+
+export default function VendorProfile() {
+  const auth = useAuth();
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+
+  const [ownerName, setOwnerName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [location, setLocation] = useState<LocationValue>({ country: "", state: "", district: "", city: "" });
+  const [address, setAddress] = useState("");
+  const [experienceYears, setExperienceYears] = useState<string>("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [serviceCategoryId, setServiceCategoryId] = useState("");
+  const [description, setDescription] = useState("");
+  const [licenseDocumentUrl, setLicenseDocumentUrl] = useState("");
+  const [shopImageUrl, setShopImageUrl] = useState<string | null>(null);
+
+  const email = auth.user?.email ?? "";
+  const { data: categoriesData } = useQuery(GET_CATEGORIES, {
+    fetchPolicy: "network-only",
+    nextFetchPolicy: "cache-first",
+  });
+  const headerName = useMemo(() => (businessName.trim() ? businessName.trim() : ownerName?.trim() ? ownerName : email), [businessName, ownerName, email]);
+
+  // Show setup message if coming from OAuth signup
+  useEffect(() => {
+    if (searchParams.get('setup') === 'true') {
+      toast({
+        title: "Welcome! Complete Your Profile",
+        description: "Please fill in your vendor details to start offering services.",
+        duration: 6000,
+      });
+    }
+  }, [searchParams, toast]);
+
+  useEffect(() => {
+    setOwnerName(auth.user?.name ?? "");
+  }, [auth.user?.name]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const res = await fetchJson<{ ok: true; profile: { vendor: VendorProfile | null } }>("/auth/profile");
+        const v = res.profile.vendor;
+        if (!mounted) return;
+        setBusinessName(v?.businessName ?? "");
+        setLocation({
+          country: v?.country ?? "India",
+          state: v?.state ?? "",
+          district: v?.district ?? "",
+          city: v?.city ?? "",
+        });
+        setAddress(v?.address ?? "");
+        setExperienceYears(v?.experienceYears != null ? String(v.experienceYears) : "");
+        setPhoneNumber(v?.phoneNumber ?? "");
+        setServiceCategoryId(v?.serviceCategoryId != null ? String(v.serviceCategoryId) : "");
+        setDescription(v?.description ?? "");
+        setLicenseDocumentUrl(v?.licenseDocumentUrl ?? "");
+        setShopImageUrl(v?.shopImageUrl ?? null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load profile";
+        toast({ title: "Profile load failed", description: message, variant: "destructive" });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      mounted = false;
+    };
+  }, [toast]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await fetchJson<{ ok: true }>("/auth/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: ownerName,
+          businessName,
+          country: location.country,
+          state: location.state,
+          district: location.district,
+          city: location.city,
+          address,
+          experienceYears: experienceYears.trim() ? Number(experienceYears) : null,
+          phoneNumber,
+          serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : null,
+          description,
+          licenseDocumentUrl,
+          shopImageUrl: shopImageUrl ?? null,
+        }),
+      });
+      await auth.refresh();
+      toast({ title: "Profile updated", description: "Vendor profile saved." });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update profile";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleUpdateLocation() {
+    setUpdatingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          await fetchJson<{ ok: true }>("/api/vendor/location", {
+            method: "POST",
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            }),
+          });
+
+          toast({
+            title: "Location updated",
+            description: "Emergency matching can now find you nearby.",
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Failed to save location";
+          toast({
+            title: "Location update failed",
+            description: message,
+            variant: "destructive",
+          });
+        } finally {
+          setUpdatingLocation(false);
+        }
+      },
+      () => {
+        setUpdatingLocation(false);
+        toast({
+          title: "Location permission needed",
+          description: "Allow location access to enable emergency matching.",
+          variant: "destructive",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+  }
+
+  return (
+    <DashboardLayout role="vendor">
+      <div className="max-w-2xl space-y-6">
+        <VendorEmergencyPanel />
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-secondary border border-border p-6">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative group">
+              {shopImageUrl ? (
+                <div className="w-20 h-20 rounded-2xl overflow-hidden relative">
+                  <img src={shopImageUrl} alt="Shop" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => setShopImageUrl(null)}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={10} className="text-destructive-foreground" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center">
+                  <Store size={32} className="text-muted-foreground" />
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors">
+                <Camera size={12} className="text-primary-foreground" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast({ title: "Image too large", description: "Max 5MB allowed.", variant: "destructive" });
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setShopImageUrl(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            </div>
+            <div>
+              <h3 className="font-display font-semibold text-foreground">{headerName || "Vendor"}</h3>
+              <p className="text-sm text-muted-foreground">
+                {loading ? "Loading profile…" : "Vendor Profile"}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Business Name</label>
+              <div className="relative">
+                <Store size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Your business name"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Owner Name</label>
+              <div className="relative">
+                <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Your name"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Email</label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={email}
+                  readOnly
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background/60 border border-border text-muted-foreground text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Phone Number</label>
+              <div className="relative">
+                <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Service Type</label>
+              <div className="relative">
+                <Briefcase size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <select
+                  value={serviceCategoryId}
+                  onChange={(e) => setServiceCategoryId(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                >
+                  <option value="">Select a category</option>
+                  {categoriesData?.categories?.map((cat: any) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <LocationSelector
+              value={location}
+              onChange={setLocation}
+              selectClassName="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+              labelClassName="text-xs font-medium text-muted-foreground mb-1.5 block"
+            />
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Emergency Location</label>
+              <button
+                type="button"
+                onClick={handleUpdateLocation}
+                disabled={updatingLocation}
+                className="inline-flex items-center px-4 py-2.5 rounded-xl border border-border text-sm hover:bg-muted transition-colors disabled:opacity-60"
+              >
+                {updatingLocation ? (
+                  <>
+                    <Loader2 size={14} className="mr-2 animate-spin" /> Updating location...
+                  </>
+                ) : (
+                  <>
+                    <Navigation size={14} className="mr-2" /> Update My Location
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Use this once so customers can find you in emergency help.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Address *</label>
+              <div className="relative">
+                <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="123 Main Street, Building Name"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Experience (years)</label>
+              <input
+                type="number"
+                value={experienceYears}
+                onChange={(e) => setExperienceYears(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="e.g. 5"
+                min={0}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Business Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                placeholder="Tell customers about your business, services, and expertise..."
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">License/Certification URL</label>
+              <div className="relative">
+                <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="url"
+                  value={licenseDocumentUrl}
+                  onChange={(e) => setLicenseDocumentUrl(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="https://example.com/license.pdf"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Link to your license or certification document</p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="mt-6 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save Changes"}
+          </button>
+        </motion.div>
+      </div>
+    </DashboardLayout>
+  );
+}

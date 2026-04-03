@@ -1,0 +1,1 @@
+ALTER TABLE vendors ADD COLUMN IF NOT EXISTS video_consultation_enabled BOOLEAN DEFAULT FALSE;

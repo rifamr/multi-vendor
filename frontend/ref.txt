@@ -1,0 +1,249 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { MessageCircle, X, Send, Bot, User } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+type Message = { id: string; role: "user" | "bot"; text: string };
+
+type RoleCtx = "customer" | "vendor" | "admin" | "public";
+
+function detectRole(pathname: string): RoleCtx {
+    if (pathname.startsWith("/customer")) return "customer";
+    if (pathname.startsWith("/vendor")) return "vendor";
+    if (pathname.startsWith("/admin")) return "admin";
+    return "public";
+}
+
+const welcomeMessages: Record<RoleCtx, string> = {
+    customer: "👋 Hi there! I can help you discover services, manage bookings, or answer questions. What do you need?",
+    vendor: "👋 Welcome back! I can help with your earnings, service listings, and booking management. How can I assist?",
+    admin: "👋 Hello, Admin! I can help with platform stats, vendor management, and moderation. What would you like to know?",
+    public: "👋 Hi! I'm the ServiceBook assistant. I can help you find services, learn about our platform, or answer questions. Ask away!",
+};
+
+type MockEntry = { keywords: string[]; response: string };
+
+const sharedResponses: MockEntry[] = [
+    { keywords: ["hello", "hi", "hey"], response: "Hello! 😊 How can I help you today?" },
+    { keywords: ["help"], response: "Sure! You can ask me about services, bookings, pricing, or how the platform works. Just type your question!" },
+    { keywords: ["thank", "thanks"], response: "You're welcome! Let me know if there's anything else I can help with. 😊" },
+    { keywords: ["pricing", "cost", "price"], response: "Service prices vary by provider. You can view each service's pricing on its detail page. Would you like help finding a specific service?" },
+];
+
+const roleResponses: Record<RoleCtx, MockEntry[]> = {
+    customer: [
+        { keywords: ["book", "booking", "appointment"], response: "To book a service:\n1. Browse or search for a service\n2. Select your preferred date & time\n3. Confirm the booking on the checkout page\n\nNeed help finding a specific service?" },
+        { keywords: ["cancel", "reschedule"], response: "You can manage your bookings from the **My Bookings** page. Each booking has options to reschedule or cancel. Would you like me to guide you there?" },
+        { keywords: ["review", "rate"], response: "After a completed service, you'll see a **Leave Review** option on your bookings page. Your feedback helps other customers and the vendor!" },
+        { keywords: ["service", "find", "search"], response: "You can browse all services from the **Services** page. Use the search bar and category filters to narrow down what you're looking for!" },
+    ],
+    vendor: [
+        { keywords: ["earning", "revenue", "income", "money"], response: "Check your **Earnings** page for a full breakdown of your revenue, pending payouts, and transaction history. Your earnings update after each completed booking!" },
+        { keywords: ["service", "listing", "add", "create"], response: "To create a new service listing:\n1. Go to **My Services**\n2. Click **Add Service**\n3. Fill in the details, pricing, and photos\n4. Submit for review\n\nTip: Detailed descriptions get more bookings!" },
+        { keywords: ["book", "booking", "request"], response: "You can view and manage all booking requests from your **Bookings** page. Accept or decline requests, and track upcoming appointments." },
+        { keywords: ["profile", "verify", "verification"], response: "Complete your vendor profile to increase visibility. Upload your license/certification and fill in your business details for verification." },
+    ],
+    admin: [
+        { keywords: ["vendor", "approve", "application"], response: "Head to the **Vendors** page to review pending applications. You can approve, reject, or request more information from each applicant." },
+        { keywords: ["stat", "analytics", "report", "user"], response: "Platform stats are available on your **Dashboard**. You can see active users, total bookings, revenue trends, and vendor metrics at a glance." },
+        { keywords: ["review", "moderate", "flag"], response: "Check the **Reviews** page for flagged or reported reviews. You can approve, edit, or remove reviews that violate platform guidelines." },
+        { keywords: ["category", "categories"], response: "Manage service categories from the **Categories** page. You can add new categories, edit existing ones, or reorganize the hierarchy." },
+    ],
+    public: [
+        { keywords: ["service", "find", "search"], response: "Browse our **Services** page to discover providers in your area. You can filter by category, location, and ratings!" },
+        { keywords: ["sign", "register", "join", "account"], response: "To get started, click **Sign In** at the top of the page. You can create an account as a customer to book services, or as a vendor to offer your services!" },
+        { keywords: ["book", "booking"], response: "To book a service, you'll need to sign in first. Once logged in, browse services and follow the booking flow!" },
+        { keywords: ["vendor", "provider", "offer"], response: "Want to offer your services? Sign up as a vendor! You'll be able to create listings, manage bookings, and grow your business on our platform." },
+    ],
+};
+
+const fallbackResponses = [
+    "I'm not sure I understand. Could you rephrase that? You can ask me about services, bookings, or how the platform works.",
+    "Hmm, I don't have an answer for that yet. Try asking about bookings, services, or platform features!",
+    "I'm still learning! Try asking me about finding services, managing bookings, or your account.",
+];
+
+function findResponse(input: string, role: RoleCtx): string {
+    const lower = input.toLowerCase();
+    const pools = [...(roleResponses[role] ?? []), ...sharedResponses];
+    for (const entry of pools) {
+        if (entry.keywords.some((kw) => lower.includes(kw))) return entry.response;
+    }
+    return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+}
+
+let idCounter = 0;
+const uid = () => `msg-${++idCounter}-${Date.now()}`;
+
+export default function AIChatbot() {
+    const { pathname } = useLocation();
+    const role = detectRole(pathname);
+    const [open, setOpen] = useState(false);
+    const [messages, setMessages] = useState < Message[] > ([]);
+    const [input, setInput] = useState("");
+    const [typing, setTyping] = useState(false);
+    const scrollRef = useRef < HTMLDivElement > (null);
+    const inputRef = useRef < HTMLInputElement > (null);
+    const initializedRole = useRef < RoleCtx | null > (null);
+
+    // Reset & add welcome when role changes or first open
+    useEffect(() => {
+        if (open && initializedRole.current !== role) {
+            initializedRole.current = role;
+            setMessages([{ id: uid(), role: "bot", text: welcomeMessages[role] }]);
+        }
+    }, [open, role]);
+
+    // Auto-scroll
+    useEffect(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }, [messages, typing]);
+
+    // Focus input on open
+    useEffect(() => {
+        if (open) setTimeout(() => inputRef.current?.focus(), 200);
+    }, [open]);
+
+    const send = useCallback(() => {
+        const text = input.trim();
+        if (!text || typing) return;
+        const userMsg: Message = { id: uid(), role: "user", text };
+        setMessages((prev) => [...prev, userMsg]);
+        setInput("");
+        setTyping(true);
+
+        const delay = 800 + Math.random() * 1200;
+        setTimeout(() => {
+            const reply = findResponse(text, role);
+            setMessages((prev) => [...prev, { id: uid(), role: "bot", text: reply }]);
+            setTyping(false);
+        }, delay);
+    }, [input, typing, role]);
+
+    return (
+        <>
+            {/* Floating bubble */}
+            <AnimatePresence>
+                {!open && (
+                    <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        onClick={() => setOpen(true)}
+                        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+                        aria-label="Open chat"
+                    >
+                        <MessageCircle size={24} />
+                    </motion.button>
+                )}
+            </AnimatePresence>
+
+            {/* Chat panel */}
+            <AnimatePresence>
+                {open && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 40, scale: 0.95 }}
+                        transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                        className="fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-3rem)] rounded-2xl border border-border bg-background shadow-2xl flex flex-col overflow-hidden"
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/60">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                                    <Bot size={16} className="text-primary" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground leading-none">ServiceBook AI</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Always here to help</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setOpen(false)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                                aria-label="Close chat"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Messages */}
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                            {messages.map((msg) => (
+                                <motion.div
+                                    key={msg.id}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                >
+                                    {msg.role === "bot" && (
+                                        <div className="w-6 h-6 rounded-full bg-primary/20 flex-shrink-0 flex items-center justify-center mt-0.5">
+                                            <Bot size={12} className="text-primary" />
+                                        </div>
+                                    )}
+                                    <div
+                                        className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "user"
+                                                ? "bg-primary text-primary-foreground rounded-br-md"
+                                                : "bg-secondary text-foreground rounded-bl-md"
+                                            }`}
+                                    >
+                                        {msg.text}
+                                    </div>
+                                    {msg.role === "user" && (
+                                        <div className="w-6 h-6 rounded-full bg-muted flex-shrink-0 flex items-center justify-center mt-0.5">
+                                            <User size={12} className="text-muted-foreground" />
+                                        </div>
+                                    )}
+                                </motion.div>
+                            ))}
+
+                            {/* Typing indicator */}
+                            {typing && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 items-start">
+                                    <div className="w-6 h-6 rounded-full bg-primary/20 flex-shrink-0 flex items-center justify-center mt-0.5">
+                                        <Bot size={12} className="text-primary" />
+                                    </div>
+                                    <div className="bg-secondary px-4 py-3 rounded-2xl rounded-bl-md flex gap-1">
+                                        {[0, 1, 2].map((i) => (
+                                            <motion.span
+                                                key={i}
+                                                className="w-1.5 h-1.5 rounded-full bg-muted-foreground"
+                                                animate={{ y: [0, -4, 0] }}
+                                                transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.15 }}
+                                            />
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </div>
+
+                        {/* Input */}
+                        <div className="px-3 py-3 border-t border-border bg-secondary/40">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    ref={inputRef}
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && send()}
+                                    placeholder="Type a message…"
+                                    className="flex-1 px-3 py-2 rounded-xl bg-background border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                                <button
+                                    onClick={send}
+                                    disabled={!input.trim() || typing}
+                                    className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-40"
+                                    aria-label="Send message"
+                                >
+                                    <Send size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+}

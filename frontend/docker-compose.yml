@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gig-connect-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gig_connect
+    ports:
+      - "5432:5432"
+    volumes:
+      - gig_connect_pgdata:/var/lib/postgresql/data
+
+volumes:
+  gig_connect_pgdata:
