@@ -78,8 +78,26 @@ async function dbGetCategories() {
   if (!pool) return null;
   
   try {
-    const result = await pool.query<{ id: string; name: string }>(
-      "SELECT id::text AS id, name FROM service_categories ORDER BY id ASC"
+    const result = await pool.query<{ id: string; name: string; servicesCount: number; vendorsCount: number }>(
+      `
+      SELECT
+        sc.id::text AS id,
+        sc.name,
+        COALESCE(svc.services_count, 0)::int AS "servicesCount",
+        COALESCE(vnd.vendors_count, 0)::int AS "vendorsCount"
+      FROM service_categories sc
+      LEFT JOIN (
+        SELECT category_id, COUNT(*)::int AS services_count
+        FROM services
+        GROUP BY category_id
+      ) svc ON svc.category_id = sc.id
+      LEFT JOIN (
+        SELECT service_category_id, COUNT(*)::int AS vendors_count
+        FROM vendors
+        GROUP BY service_category_id
+      ) vnd ON vnd.service_category_id = sc.id
+      ORDER BY sc.id ASC
+      `
     );
     
     // Cache the result
@@ -90,6 +108,56 @@ async function dbGetCategories() {
     if (process.env.NODE_ENV === "development") {
       // eslint-disable-next-line no-console
       console.warn("DB categories query failed; falling back to in-memory data.", err);
+    }
+    return null;
+  }
+}
+
+async function dbCreateCategory(name: string): Promise<{ id: string; name: string; servicesCount: number; vendorsCount: number } | null> {
+  const pool = getPoolOptional();
+  if (!pool) return null;
+
+  try {
+    const existing = await pool.query<{ id: string; name: string; servicesCount: number; vendorsCount: number }>(
+      `
+      SELECT
+        sc.id::text AS id,
+        sc.name,
+        COALESCE(svc.services_count, 0)::int AS "servicesCount",
+        COALESCE(vnd.vendors_count, 0)::int AS "vendorsCount"
+      FROM service_categories sc
+      LEFT JOIN (
+        SELECT category_id, COUNT(*)::int AS services_count
+        FROM services
+        GROUP BY category_id
+      ) svc ON svc.category_id = sc.id
+      LEFT JOIN (
+        SELECT service_category_id, COUNT(*)::int AS vendors_count
+        FROM vendors
+        GROUP BY service_category_id
+      ) vnd ON vnd.service_category_id = sc.id
+      WHERE LOWER(sc.name) = LOWER($1)
+      LIMIT 1
+      `,
+      [name]
+    );
+    if (existing.rows[0]) return existing.rows[0];
+
+    const inserted = await pool.query<{ id: string; name: string; servicesCount: number; vendorsCount: number }>(
+      `
+      INSERT INTO service_categories (name)
+      VALUES ($1)
+      RETURNING id::text AS id, name, 0::int AS "servicesCount", 0::int AS "vendorsCount"
+      `,
+      [name]
+    );
+
+    categoriesCache.delete("all_categories");
+    return inserted.rows[0] ?? null;
+  } catch (err) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("DB category create failed; falling back to in-memory data.", err);
     }
     return null;
   }
@@ -298,7 +366,13 @@ async function dbGetServices(args: { filter?: any; sort?: any; limit?: number; o
 
 export const resolvers: any = {
   Query: {
-    categories: async () => (await dbGetCategories()) ?? categories,
+    categories: async () =>
+      (await dbGetCategories()) ??
+      categories.map((category) => ({
+        ...category,
+        servicesCount: services.filter((service) => service.categoryId === category.id).length,
+        vendorsCount: 0,
+      })),
 
     services: async (_parent: any, args: any) => {
       const { filter, sort, limit, offset } = args;
@@ -552,6 +626,41 @@ export const resolvers: any = {
           recentReviews: [],
         };
       }
+    },
+  },
+
+  Mutation: {
+    createCategory: async (_parent: any, args: { name: string }) => {
+      const normalizedName = String(args?.name ?? "").trim();
+      if (!normalizedName) {
+        throw new Error("Category name is required");
+      }
+
+      const dbCategory = await dbCreateCategory(normalizedName);
+      if (dbCategory) {
+        categoryMap.set(dbCategory.id, dbCategory);
+        return dbCategory;
+      }
+
+      const existing = categories.find(
+        (category) => category.name.toLowerCase() === normalizedName.toLowerCase()
+      );
+      if (existing) return existing;
+
+      const nextId =
+        categories.reduce((maxId, category) => Math.max(maxId, Number(category.id) || 0), 0) + 1;
+      const newCategory = {
+        id: String(nextId),
+        name: normalizedName,
+        servicesCount: 0,
+        vendorsCount: 0,
+      };
+
+      categories.push(newCategory);
+      categoryMap.set(newCategory.id, newCategory);
+      categoriesCache.delete("all_categories");
+
+      return newCategory;
     },
   },
 

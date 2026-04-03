@@ -5,6 +5,17 @@ export const GET_CATEGORIES = gql`
     categories {
       id
       name
+      servicesCount
+      vendorsCount
+    }
+  }
+`;
+
+export const CREATE_CATEGORY = gql`
+  mutation CreateCategory($name: String!) {
+    createCategory(name: $name) {
+      id
+      name
     }
   }
 `;

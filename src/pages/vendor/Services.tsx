@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Plus, Calendar, Clock, Trash2, Edit, DollarSign } from "lucide-react";
+import { Plus, Calendar, Clock, Trash2, Edit, IndianRupee } from "lucide-react";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -670,7 +670,7 @@ export default function VendorServices() {
             ) : services.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-12">
-                  <DollarSign size={48} className="mx-auto mb-4 opacity-50 text-muted-foreground" />
+                  <IndianRupee size={48} className="mx-auto mb-4 opacity-50 text-muted-foreground" />
                   <p className="text-muted-foreground">No services created yet.</p>
                   <p className="text-xs text-muted-foreground mt-2">Click "Add Service" to create your first offering.</p>
                 </CardContent>
@@ -722,7 +722,7 @@ export default function VendorServices() {
                         <div className="flex items-center gap-6 text-sm">
                           {service.price && (
                             <div className="flex items-center gap-1">
-                              <DollarSign size={14} className="text-muted-foreground" />
+                              <IndianRupee size={14} className="text-muted-foreground" />
                               <span className="font-medium">₹{service.price}</span>
                             </div>
                           )}
@@ -1077,7 +1077,7 @@ export default function VendorServices() {
                   return (
                     <div key={serviceKey} className="space-y-4">
                       <div className="flex items-center gap-3 px-2 py-2 bg-primary/5 rounded-lg border border-primary/20">
-                        <DollarSign size={20} className="text-primary" />
+                        <IndianRupee size={20} className="text-primary" />
                         <h3 className="font-semibold text-lg text-foreground">{serviceName}</h3>
                         <Badge variant="outline" className="ml-auto">
                           {serviceSlots.length} slot{serviceSlots.length !== 1 ? 's' : ''}

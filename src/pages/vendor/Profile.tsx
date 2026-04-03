@@ -61,7 +61,10 @@ export default function VendorProfile() {
   const [shopImageUrl, setShopImageUrl] = useState<string | null>(null);
 
   const email = auth.user?.email ?? "";
-  const { data: categoriesData } = useQuery(GET_CATEGORIES);
+  const { data: categoriesData } = useQuery(GET_CATEGORIES, {
+    fetchPolicy: "network-only",
+    nextFetchPolicy: "cache-first",
+  });
   const headerName = useMemo(() => (businessName.trim() ? businessName.trim() : ownerName?.trim() ? ownerName : email), [businessName, ownerName, email]);
 
   // Show setup message if coming from OAuth signup

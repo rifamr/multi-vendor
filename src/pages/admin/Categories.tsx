@@ -1,18 +1,123 @@
+import { useState } from "react";
+import { useMutation, useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
-import { adminCategories } from "@/data/mockData";
+import { CREATE_CATEGORY, GET_CATEGORIES } from "@/graphql/serviceQueries";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+
+type AdminCategory = {
+  id: string;
+  name: string;
+  services: number;
+  vendors: number;
+  status: string;
+};
 
 export default function AdminCategories() {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const { data, loading } = useQuery(GET_CATEGORIES);
+  const [createCategory, { loading: creatingCategory }] = useMutation(CREATE_CATEGORY);
+
+  const categories: AdminCategory[] =
+    data?.categories?.map((category: { id: string; name: string; servicesCount?: number; vendorsCount?: number }) => ({
+      id: category.id,
+      name: category.name,
+      services: category.servicesCount ?? 0,
+      vendors: category.vendorsCount ?? 0,
+      status: "active",
+    })) ?? [];
+
+  const handleAddCategory = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedName = newCategoryName.trim();
+
+    if (!normalizedName) {
+      toast.error("Category name is required");
+      return;
+    }
+
+    const alreadyExists = categories.some(
+      (category) => category.name.toLowerCase() === normalizedName.toLowerCase()
+    );
+    if (alreadyExists) {
+      toast.error("Category already exists");
+      return;
+    }
+
+    try {
+      await createCategory({
+        variables: { name: normalizedName },
+        refetchQueries: [{ query: GET_CATEGORIES }],
+        awaitRefetchQueries: true,
+      });
+
+      setNewCategoryName("");
+      setIsAddOpen(false);
+      toast.success("Category added");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add category";
+      toast.error(message);
+    }
+  };
+
   return (
     <DashboardLayout role="admin">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h3 className="font-display font-semibold text-foreground">Service Categories</h3>
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
             <Plus size={16} /> Add Category
           </button>
         </div>
+
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Service Category</DialogTitle>
+              <DialogDescription>Create a new category for vendor services.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddCategory} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="category-name" className="text-sm font-medium text-foreground">
+                  Category name
+                </label>
+                <Input
+                  id="category-name"
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  placeholder="e.g. Pet Grooming"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setNewCategoryName("");
+                  }}
+                  className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingCategory}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+                >
+                  {creatingCategory ? "Adding..." : "Add Category"}
+                </button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <div className="rounded-2xl bg-secondary border border-border overflow-hidden">
           <table className="w-full text-sm">
@@ -26,7 +131,14 @@ export default function AdminCategories() {
               </tr>
             </thead>
             <tbody>
-              {adminCategories.map((c, i) => (
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="px-5 py-6 text-center text-muted-foreground">
+                    Loading categories...
+                  </td>
+                </tr>
+              )}
+              {categories.map((c, i) => (
                 <motion.tr
                   key={c.id}
                   initial={{ opacity: 0 }}

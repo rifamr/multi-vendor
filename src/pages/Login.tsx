@@ -48,7 +48,10 @@ export default function Login() {
   const [description, setDescription] = useState("");
   const [licenseDocumentUrl, setLicenseDocumentUrl] = useState("");
 
-  const { data: categoriesData } = useQuery(GET_CATEGORIES);
+  const { data: categoriesData } = useQuery(GET_CATEGORIES, {
+    fetchPolicy: "network-only",
+    nextFetchPolicy: "cache-first",
+  });
 
   // Calculate total steps based on role
   const totalSteps = mode === "signup" ? (role === "vendor" ? 3 : 2) : 1;

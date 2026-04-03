@@ -2,6 +2,8 @@ export const typeDefs = /* GraphQL */ `
   type Category {
     id: ID!
     name: String!
+    servicesCount: Int!
+    vendorsCount: Int!
   }
 
   type Vendor {
@@ -83,5 +85,9 @@ export const typeDefs = /* GraphQL */ `
     serviceReviews(serviceId: ID!): [Review!]!
     serviceRatingStats(serviceId: ID!): RatingStats!
     reviewAnalytics: ReviewAnalytics!
+  }
+
+  type Mutation {
+    createCategory(name: String!): Category!
   }
 `;
